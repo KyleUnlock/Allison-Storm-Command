@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Lead Detail</title>
+  <style>
+    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#16202b; background:#f4f7fb; }
+    header { background:#0f2740; color:#fff; padding:14px 16px; }
+    header a { color:#cfe0f5; }
+    main { max-width:640px; margin:0 auto; padding:16px; }
+    .card { background:#fff; border:1px solid #d8e0ea; border-radius:12px; padding:16px; margin:12px 0; }
+    dt { font-weight:600; color:#3a4a5b; margin-top:10px; }
+    dd { margin:2px 0 0; }
+    .withheld { color:#9a2c2c; font-weight:700; } .callable { color:#166534; font-weight:700; }
+    .hist { font-size:.85rem; color:#5b6b7c; }
+    .err { color:#9a2c2c; }
+  </style>
+</head>
+<body>
+  <header><a href="/board">← Board</a> &nbsp; Lead detail</header>
+  <main>
+    <div class="card" id="wrap"><p id="msg">Loading…</p></div>
+  </main>
+  <script>
+    const money = (n)=> '$'+(Number(n||0)).toLocaleString();
+    const id = new URL(location.href).searchParams.get('id');
+    const pw = sessionStorage.getItem('boardPw');
+    const H = pw ? { 'X-Board-Password': pw } : {};
+
+    async function load() {
+      if (!id) { document.getElementById('msg').textContent = 'No lead id.'; return; }
+      const r = await fetch('/api/lead?id='+encodeURIComponent(id), { headers:H });
+      if (r.status === 401) { location.href = '/login'; return; }
+      if (!r.ok) { document.getElementById('msg').innerHTML = '<span class="err">Lead not found.</span>'; return; }
+      const { lead:l } = await r.json();
+      const hist = (l.history||[]).map(h => '<div class="hist">'+h.at+' → '+h.status+' ('+h.actor+')</div>').join('');
+      const won = l.won ? '<dt>Won / billing</dt><dd>Collected '+money(l.won.collected)+' · Costs '+money(l.won.costs)+
+        ' · Profit '+money(l.won.profit)+' · Fee '+money(l.won.fee)+' ('+l.won.reason+')</dd>' : '';
+      document.getElementById('wrap').innerHTML =
+        '<h2 style="margin-top:0;">'+(l.name||'(no name)')+'</h2>'+
+        '<dl>'+
+          '<dt>Status</dt><dd>'+l.status+'</dd>'+
+          '<dt>Source</dt><dd>'+l.source+(l.knownCustomer?' · known customer (bills $0)':'')+'</dd>'+
+          '<dt>Contact</dt><dd>'+(l.phone||'—')+' · '+(l.email||'—')+'</dd>'+
+          '<dt>Callable</dt><dd class="'+(l.callable?'callable':'withheld')+'">'+(l.callable?'yes':'no ('+l.callReason+')')+'</dd>'+
+          '<dt>ZIP / address</dt><dd>'+(l.zip||'?')+' · '+(l.address||'—')+'</dd>'+
+          '<dt>Rep</dt><dd>'+(l.assignedRep||'—')+'</dd>'+
+          '<dt>Notes</dt><dd>'+(l.notes||'—')+'</dd>'+
+          won+
+          '<dt>History</dt><dd>'+(hist||'—')+'</dd>'+
+        '</dl>';
+    }
+    load();
+  </script>
+</body>
+</html>

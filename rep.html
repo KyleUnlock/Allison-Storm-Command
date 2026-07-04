@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Rep Console</title>
+  <style>
+    :root { --navy:#0f2740; --sky:#2f6fb0; --ink:#16202b; --line:#d8e0ea; --bg:#f4f7fb; --green:#166534; --red:#9a2c2c; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+    header { background:var(--navy); color:#fff; padding:16px; display:flex; justify-content:space-between; align-items:center; }
+    header h1 { font-size:1.05rem; margin:0; }
+    main { max-width:640px; margin:0 auto; padding:12px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin:12px 0; }
+    label { display:block; font-weight:600; margin:10px 0 4px; }
+    input, select { width:100%; padding:12px; font-size:16px; min-height:44px; border:1px solid var(--line); border-radius:8px; }
+    button { min-height:44px; padding:0 16px; font-size:1rem; font-weight:700; color:#fff; background:var(--sky); border:0; border-radius:10px; cursor:pointer; }
+    .lead { border:1px solid var(--line); border-radius:12px; padding:14px; margin:10px 0; background:#fff; }
+    .lead h3 { margin:0 0 4px; font-size:1.05rem; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .pill { font-size:.75rem; padding:3px 8px; border-radius:999px; background:#eef3f9; }
+    .callable { color:var(--green); font-weight:700; }
+    .withheld { color:var(--red); font-weight:700; }
+    .tel { display:inline-block; min-height:44px; line-height:44px; padding:0 14px; background:#eaf7ee; color:var(--green); border-radius:10px; font-weight:700; text-decoration:none; }
+    .empty { text-align:center; color:#5b6b7c; padding:32px 12px; }
+    .muted { color:#5b6b7c; font-size:.85rem; }
+    select.stage { margin-top:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Rep Console</h1>
+    <span id="who" class="muted" style="color:#cfe0f5;"></span>
+  </header>
+  <main>
+    <div class="card" id="loginCard">
+      <h2 style="margin-top:0;">Rep sign in</h2>
+      <label for="name">Rep name</label>
+      <input id="name" autocomplete="username" />
+      <label for="passcode">Passcode</label>
+      <input id="passcode" type="password" autocomplete="current-password" />
+      <button id="loginBtn" style="width:100%;margin-top:14px;">Sign in</button>
+      <p id="loginMsg" class="muted"></p>
+    </div>
+
+    <div id="board" hidden>
+      <div class="row" style="justify-content:space-between;">
+        <strong>My leads</strong>
+        <button id="refreshBtn" style="background:#5b6b7c;">Refresh</button>
+      </div>
+      <div id="leads"></div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const STAGES = ['new','contacted','inspection','inspected','quoted','negotiation','won','production','completed'];
+
+    async function login() {
+      $('loginMsg').textContent = 'Signing in…';
+      const r = await fetch('/api/rep-login', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name:$('name').value.trim(), passcode:$('passcode').value })
+      });
+      const d = await r.json();
+      if (r.ok) { $('loginMsg').textContent=''; $('who').textContent=d.rep; showBoard(); }
+      else { $('loginMsg').textContent = d.error || 'Sign in failed'; }
+    }
+
+    async function showBoard() {
+      $('loginCard').hidden = true; $('board').hidden = false;
+      await load();
+    }
+
+    async function load() {
+      const r = await fetch('/api/my-leads');
+      if (r.status === 401) { $('board').hidden=true; $('loginCard').hidden=false; return; }
+      const d = await r.json();
+      $('who').textContent = d.rep || '';
+      render(d.leads || []);
+    }
+
+    function render(leads) {
+      const box = $('leads');
+      if (!leads.length) { box.innerHTML = '<div class="empty">No leads assigned yet. New leads will appear here.</div>'; return; }
+      box.innerHTML = '';
+      for (const l of leads) {
+        const el = document.createElement('div');
+        el.className = 'lead';
+        const tel = l.callable && l.phone
+          ? '<a class="tel" href="tel:'+l.phone+'">Call '+l.phone+'</a>'
+          : '<span class="withheld">Call withheld ('+l.callReason+')</span>';
+        el.innerHTML =
+          '<h3>'+(l.name||'(no name)')+'</h3>'+
+          '<div class="row"><span class="pill">'+l.status+'</span>'+
+          '<span class="pill">'+(l.source||'')+'</span>'+
+          '<span class="pill">ZIP '+(l.zip||'?')+'</span></div>'+
+          '<p class="muted">'+(l.address||'')+'</p>'+
+          '<div class="row" style="margin:8px 0;">'+tel+'</div>'+
+          '<label>Move stage</label>';
+        const sel = document.createElement('select');
+        sel.className = 'stage';
+        for (const s of STAGES) {
+          const o = document.createElement('option'); o.value=s; o.textContent=s; if (s===l.status) o.selected=true; sel.appendChild(o);
+        }
+        sel.addEventListener('change', () => move(l.id, sel.value));
+        el.appendChild(sel);
+        box.appendChild(el);
+      }
+    }
+
+    async function move(id, status) {
+      const body = { id, status };
+      if (status === 'won') {
+        body.collected = Number(prompt('Amount collected ($)?', '0')) || 0;
+        body.costs = Number(prompt('Direct job costs ($)?', '0')) || 0;
+      }
+      const r = await fetch('/api/my-leads', {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      });
+      if (!r.ok) { const d = await r.json(); alert(d.error || 'Update failed'); }
+      load();
+    }
+
+    $('loginBtn').addEventListener('click', login);
+    $('refreshBtn').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

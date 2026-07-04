@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Board</title>
+  <style>
+    :root { --navy:#0f2740; --sky:#2f6fb0; --line:#d8e0ea; --bg:#f4f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#16202b; background:var(--bg); }
+    header { background:var(--navy); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    header h1 { font-size:1.05rem; margin:0; }
+    header a { color:#cfe0f5; }
+    main { max-width:1100px; margin:0 auto; padding:14px; }
+    .totals { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .stat { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+    .stat b { display:block; font-size:1.3rem; }
+    .wrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
+    table { border-collapse:collapse; width:100%; min-width:720px; }
+    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th { background:#eef3f9; position:sticky; top:0; }
+    select { padding:6px; border:1px solid var(--line); border-radius:6px; }
+    .empty { text-align:center; color:#5b6b7c; padding:40px; }
+    .withheld { color:#9a2c2c; } .callable { color:#166534; }
+    a.detail { color:var(--sky); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Board — All Leads</h1>
+    <span><a href="/crm">CRM kanban →</a> · <a href="#" id="signout">Sign out</a></span>
+  </header>
+  <main>
+    <div class="totals">
+      <div class="stat"><span>Leads</span><b id="count">–</b></div>
+      <div class="stat"><span>Won collected</span><b id="wonTotal">–</b></div>
+      <div class="stat"><span>Fees (20% profit)</span><b id="feeTotal">–</b></div>
+    </div>
+    <div class="wrap"><table id="tbl"><thead>
+      <tr><th>Name</th><th>Status</th><th>Source</th><th>ZIP</th><th>Rep</th><th>Callable</th><th>Won $</th><th>Fee</th><th></th></tr>
+    </thead><tbody id="rows"></tbody></table></div>
+    <div id="empty" class="empty" hidden>No leads yet. Homeowner intake at <a href="/">/</a> will populate this board.</div>
+  </main>
+  <script>
+    const STAGES = ['new','contacted','inspection','inspected','quoted','negotiation','won','production','completed'];
+    const pw = sessionStorage.getItem('boardPw');
+    if (!pw) location.href = '/login';
+    const H = { 'X-Board-Password': pw, 'Content-Type':'application/json' };
+    const money = (n) => '$' + (Number(n||0)).toLocaleString();
+
+    document.getElementById('signout').addEventListener('click', (e)=>{ e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href='/login'; });
+
+    async function load() {
+      const r = await fetch('/api/board', { headers: H });
+      if (r.status === 401) { location.href = '/login'; return; }
+      const d = await r.json();
+      document.getElementById('count').textContent = d.leads.length;
+      document.getElementById('wonTotal').textContent = money(d.wonTotal);
+      document.getElementById('feeTotal').textContent = money(d.feeTotal);
+      const rows = document.getElementById('rows');
+      document.getElementById('empty').hidden = d.leads.length > 0;
+      rows.innerHTML = '';
+      for (const l of d.leads) {
+        const tr = document.createElement('tr');
+        const sel = STAGES.map(s => '<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>').join('');
+        tr.innerHTML =
+          '<td>'+(l.name||'(no name)')+'</td>'+
+          '<td><select data-id="'+l.id+'">'+sel+'</select></td>'+
+          '<td>'+(l.source||'')+'</td>'+
+          '<td>'+(l.zip||'')+'</td>'+
+          '<td>'+(l.assignedRep||'—')+'</td>'+
+          '<td class="'+(l.callable?'callable':'withheld')+'">'+(l.callable?'yes':'no')+'</td>'+
+          '<td>'+(l.won?money(l.won.collected):'—')+'</td>'+
+          '<td>'+(l.won?money(l.won.fee):'—')+'</td>'+
+          '<td><a class="detail" href="/lead?id='+l.id+'">open</a></td>';
+        rows.appendChild(tr);
+      }
+      rows.querySelectorAll('select').forEach(sel => sel.addEventListener('change', () => move(sel.dataset.id, sel.value)));
+    }
+
+    async function move(id, status) {
+      const body = { id, status };
+      if (status === 'won') {
+        body.collected = Number(prompt('Amount collected ($)?','0'))||0;
+        body.costs = Number(prompt('Direct job costs ($)?','0'))||0;
+      }
+      const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify(body) });
+      if (!r.ok) { const d = await r.json(); alert(d.error||'Update failed'); }
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>

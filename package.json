@@ -1,0 +1,16 @@
+{
+  "name": "allison-storm-command",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Allison Roofing storm-restoration lead-gen app (CORE build).",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.js && npm run lint:copy",
+    "lint:copy": "node scripts/lint-copy.js",
+    "start": "node serve.local.js",
+    "smoke": "bash smoke.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

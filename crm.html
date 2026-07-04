@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — CRM Kanban</title>
+  <style>
+    :root { --navy:#0f2740; --sky:#2f6fb0; --line:#d8e0ea; --bg:#f4f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#16202b; background:var(--bg); }
+    header { background:var(--navy); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    header h1 { font-size:1.05rem; margin:0; }
+    header a { color:#cfe0f5; }
+    .rail { display:flex; gap:12px; overflow-x:auto; padding:14px; align-items:flex-start; }
+    .col { flex:0 0 240px; background:#eef3f9; border:1px solid var(--line); border-radius:12px; padding:10px; min-height:120px; }
+    .col.drag { outline:2px dashed var(--sky); }
+    .col h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; margin:2px 0 8px; color:#3a4a5b; }
+    .col .total { font-size:.8rem; color:#166534; font-weight:700; margin-bottom:6px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; margin:8px 0; cursor:grab; }
+    .card h3 { margin:0 0 4px; font-size:.95rem; }
+    .card .meta { color:#5b6b7c; font-size:.78rem; }
+    .card select { width:100%; margin-top:6px; padding:6px; border:1px solid var(--line); border-radius:6px; min-height:36px; }
+    .empty { color:#8494a4; font-size:.8rem; padding:8px 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CRM — Pipeline</h1>
+    <span><a href="/board">← Board</a> · <a href="#" id="signout">Sign out</a></span>
+  </header>
+  <div class="rail" id="rail"></div>
+  <script>
+    const STAGES = ['new','contacted','inspection','inspected','quoted','negotiation','won','production','completed'];
+    const pw = sessionStorage.getItem('boardPw');
+    if (!pw) location.href = '/login';
+    const H = { 'X-Board-Password': pw, 'Content-Type':'application/json' };
+    const money = (n) => '$' + (Number(n||0)).toLocaleString();
+
+    document.getElementById('signout').addEventListener('click', (e)=>{ e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href='/login'; });
+
+    async function load() {
+      const r = await fetch('/api/board', { headers:H });
+      if (r.status === 401) { location.href='/login'; return; }
+      const d = await r.json();
+      render(d.leads || []);
+    }
+
+    // SINGLE shared move path — used by BOTH drag-drop and the <select> fallback.
+    async function moveLead(id, status) {
+      const body = { id, status };
+      if (status === 'won') {
+        body.collected = Number(prompt('Amount collected ($)?','0'))||0;
+        body.costs = Number(prompt('Direct job costs ($)?','0'))||0;
+      }
+      const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify(body) });
+      if (!r.ok) { const e = await r.json(); alert(e.error||'Update failed'); }
+      load();
+    }
+
+    function render(leads) {
+      const rail = document.getElementById('rail');
+      rail.innerHTML = '';
+      const byStage = Object.fromEntries(STAGES.map(s => [s, []]));
+      for (const l of leads) (byStage[l.status] || (byStage[l.status]=[])).push(l);
+
+      for (const stage of STAGES) {
+        const col = document.createElement('div');
+        col.className = 'col'; col.dataset.stage = stage;
+        let head = '<h2>'+stage+'</h2>';
+        if (stage === 'won') {
+          const total = byStage['won'].reduce((s,l)=> s + (l.won?l.won.collected:0), 0);
+          head += '<div class="total">Won total: '+money(total)+'</div>';
+        }
+        col.innerHTML = head;
+
+        // drop target
+        col.addEventListener('dragover', (e)=>{ e.preventDefault(); col.classList.add('drag'); });
+        col.addEventListener('dragleave', ()=> col.classList.remove('drag'));
+        col.addEventListener('drop', (e)=>{
+          e.preventDefault(); col.classList.remove('drag');
+          const id = e.dataTransfer.getData('text/plain');
+          if (id) moveLead(id, stage);
+        });
+
+        const items = byStage[stage] || [];
+        if (!items.length) {
+          const em = document.createElement('div'); em.className='empty'; em.textContent='No leads'; col.appendChild(em);
+        }
+        for (const l of items) {
+          const card = document.createElement('div');
+          card.className = 'card'; card.draggable = true;
+          card.addEventListener('dragstart', (e)=> e.dataTransfer.setData('text/plain', l.id));
+          card.innerHTML = '<h3>'+(l.name||'(no name)')+'</h3>'+
+            '<div class="meta">'+(l.source||'')+' · ZIP '+(l.zip||'?')+(l.assignedRep?(' · '+l.assignedRep):'')+'</div>'+
+            (l.won?('<div class="meta">'+money(l.won.collected)+' · fee '+money(l.won.fee)+'</div>'):'');
+          // touch fallback — SAME moveLead path as drag-drop
+          const sel = document.createElement('select');
+          sel.innerHTML = STAGES.map(s=>'<option value="'+s+'"'+(s===stage?' selected':'')+'>'+s+'</option>').join('');
+          sel.addEventListener('change', ()=> moveLead(l.id, sel.value));
+          card.appendChild(sel);
+          col.appendChild(card);
+        }
+        rail.appendChild(col);
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
