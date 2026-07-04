@@ -28,6 +28,8 @@ function view(lead) {
     zip: lead.zip,
     address: lead.address,
     source: lead.source,
+    adSource: lead.adSource || null,
+    campaign: lead.campaign || null,
     assignedRep: lead.assignedRep,
     knownCustomer: lead.knownCustomer,
     callable: call.callable,

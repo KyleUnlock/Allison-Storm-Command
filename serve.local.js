@@ -25,6 +25,8 @@ const routes = {
   '/api/storm-status': require('./api/storm-status'),
   '/api/storm-import': require('./api/storm-import'),
   '/api/tasks': require('./api/tasks'),
+  '/api/meta-webhook': require('./api/meta-webhook'),
+  '/api/callrail-webhook': require('./api/callrail-webhook'),
 };
 
 // pretty path -> html file (Vercel rewrites)

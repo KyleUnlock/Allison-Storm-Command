@@ -67,7 +67,7 @@
           '<td>'+(l.name||'(no name)')+'</td>'+
           '<td>'+(l.score!=null?l.score:'—')+'</td>'+
           '<td><select data-id="'+l.id+'">'+sel+'</select></td>'+
-          '<td>'+(l.source||'')+'</td>'+
+          '<td>'+(l.source||'')+(l.adSource?' · '+l.adSource:'')+'</td>'+
           '<td>'+(l.zip||'')+'</td>'+
           '<td>'+(l.assignedRep||'—')+'</td>'+
           '<td class="'+(l.slaBreached?'withheld':'')+'">'+(l.slaBreached?'breached':(l.assignedAt?'ok':'—'))+'</td>'+

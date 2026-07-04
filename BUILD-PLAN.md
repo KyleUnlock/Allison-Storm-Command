@@ -69,6 +69,38 @@ Evidence: `npm test` 46/46 green + `lint:copy` OK.
   SMS-consent marker is missing from `index.html` or the 3-day-cancel marker from
   `notice.html`; all existing deductible/HB-2102/storm/money-term checks retained.
 
+## Phase D — Paid-Play Lead Sources (ad webhooks) — **DONE (ships dark)**
+
+Maps external paid-ad leads into the EXISTING sanitized `createLead` path with
+`source='ad'`, so they inherit scoring, routing, SLA, and DNC/consent gating. No
+re-widening of the public POST. Both webhooks are signature-verified over the RAW
+request body and **FAIL CLOSED** when their env secret is unset: a live probe
+returns the designed 401/403 — **never 500, never a lead**. Kyle flips the env
+when the ad accounts are granted.
+
+- **D1 Meta Instant Form** — `api/meta-webhook.js`. POST verifies
+  `X-Hub-Signature-256` (`sha256=<hex>` HMAC-SHA256 over raw body) with
+  `META_APP_SECRET`; **unset secret → 401**. GET subscription handshake echoes
+  `hub.challenge` only when `hub.mode=subscribe` and `hub.verify_token` matches
+  `META_VERIFY_TOKEN`; **unset token → 403**. Maps `field_data` →
+  `source='ad'`, `adSource='meta'`, campaign/form ids in `campaign`.
+- **D2 Google LSA / CallRail** — `api/callrail-webhook.js`. Verifies HMAC-SHA256
+  (base64 digest) over the raw body with `CALLRAIL_SIGNING_KEY`; **unset key →
+  401**. Maps the call → `source='ad'`, `adSource='callrail'` (or `'lsa'` for
+  Google Local Services). Caller number captured but a cold `ad` phone — **not
+  callable until DNC-scrubbed**.
+- **D3 source-ROI tagging** — `lib/leads.createLead` now persists `adSource` +
+  `campaign` (source/campaign/form/ad ids + cost/click ids like `gclid`) on the
+  lead for the later cost-per-lead / close-rate-by-source analytics phase.
+  `api/board` + `board.html` surface `source · adSource`.
+- **Shared verify** — `lib/webhook-verify.js` (`readRawBody`, `verifySignature`,
+  constant-time `timingSafeEqual` over `node:crypto`), reused by both handlers.
+  Both read the RAW body; `serve.local.js` passes it through for local/test runs.
+- Evidence: `test/phased.test.js` — for BOTH webhooks: unset secret → fail
+  closed / no lead; bad signature → fail closed / no lead; valid signature →
+  sanitized `source='ad'` lead created, scored, DNC-withheld; plus the Meta GET
+  challenge echo (only with the correct token). `npm test` green + `lint:copy` OK.
+
 ## Core design notes
 
 - **KV schema keys** (`lib/store.js`, 5 primitives: get/set/del/listPush/listRange):
