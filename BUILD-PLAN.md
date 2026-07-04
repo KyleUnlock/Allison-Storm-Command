@@ -45,6 +45,30 @@ silently reappear.
 > `_Coord/goals/allison-leadgen-COMPLETE-STRUCTURE-GOAL.md` Phase A and remain
 > pending there.
 
+## Phase B — Compliance Spine ("Phase 5") — **DONE**
+
+Every compliance gate fails safe (absence of consent/scrub/provider WITHHOLDS).
+Evidence: `npm test` 46/46 green + `lint:copy` OK.
+
+- **B1 DNC on export.** `api/export.js` (operator-gated CSV, like `api/board`) +
+  `lib/export.js` (`toCsv`/`exportPhone`). A phone leaves ONLY when
+  `dnc.isCallable(lead).callable`; unscrubbed/cold or no-provider numbers are
+  redacted. Fail-safe test: *"B1 FAIL-SAFE: with NO DNC provider env set, ALL
+  cold phones are withheld."*
+- **B2 SB140 SMS consent + opt-out.** `lib/consent.js` (ledgered
+  `consent:sms:<phone>` / `optout:sms:<phone>`, `isSmsCallable`) + `api/sms-optout.js`
+  (STOP handler, one-directional). `index.html` carries the SB140 opt-in checkbox;
+  `api/leads.js` captures consent without re-widening the sanitized public POST.
+  Fail-safe test: *"B2 FAIL-SAFE: a number with NO consent record is NOT
+  SMS-callable"* (+ opt-out stays opted-out).
+- **B3 3-day right-to-cancel.** `lib/notices.js` (canonical
+  `NOTICE_3DAY_CANCEL`) surfaced on `notice.html` (route `/notice`, linked from
+  intake). Fail-safe test: *"B3 FAIL-SAFE: required compliance copy is present on
+  its page (lint presence check)."*
+- **B4 lint presence check.** `scripts/lint-copy.js` now also fails if the SB140
+  SMS-consent marker is missing from `index.html` or the 3-day-cancel marker from
+  `notice.html`; all existing deductible/HB-2102/storm/money-term checks retained.
+
 ## Core design notes
 
 - **KV schema keys** (`lib/store.js`, 5 primitives: get/set/del/listPush/listRange):

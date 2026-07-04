@@ -22,6 +22,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const consent = require('../lib/consent');
+const notices = require('../lib/notices');
+
 const ROOT = path.resolve(__dirname, '..');
 
 // Banned regexes (case-insensitive). Keep the patterns here as strings so the
@@ -46,6 +49,23 @@ const MONEY_BANNED = [
 
 // Files exempt from the MONEY_BANNED patterns only (matched by basename).
 const MONEY_EXEMPT = new Set(['deal-terms.js', '.env.example']);
+
+// PRESENCE checks: required compliance copy that MUST appear on a given page.
+// A missing string fails the lint (fail-safe against a page silently dropping
+// its SB140 SMS-consent language or its 3-day right-to-cancel notice). Markers
+// are single-sourced from lib/consent and lib/notices so page + linter agree.
+const REQUIRED = [
+  {
+    file: 'index.html',
+    marker: consent.SMS_CONSENT_MARKER,
+    why: 'SB140 SMS-consent language',
+  },
+  {
+    file: 'notice.html',
+    marker: notices.NOTICE_3DAY_CANCEL_MARKER,
+    why: '3-day right-to-cancel notice',
+  },
+];
 
 const SCAN_DIRS = ['', 'lib', 'api', 'public'];
 const SCAN_EXT = new Set(['.html', '.js']);
@@ -86,8 +106,27 @@ for (const file of files) {
   });
 }
 
+// PRESENCE checks — required compliance copy must be present where mandated.
+for (const { file, marker, why } of REQUIRED) {
+  const abs = path.join(ROOT, file);
+  if (!fs.existsSync(abs)) {
+    hits += 1;
+    console.error(`MISSING REQUIRED PAGE [${why}] ${file}: file not found`);
+    continue;
+  }
+  const text = fs.readFileSync(abs, 'utf8');
+  if (!text.includes(marker)) {
+    hits += 1;
+    console.error(
+      `MISSING REQUIRED COPY [${why}] ${file}: expected marker not found -> "${marker}"`
+    );
+  }
+}
+
 if (hits > 0) {
-  console.error(`\nlint:copy FAILED — ${hits} banned phrase(s) found.`);
+  console.error(`\nlint:copy FAILED — ${hits} banned phrase(s) or missing notice(s) found.`);
   process.exit(1);
 }
-console.log('lint:copy OK — no banned deductible/storm/money-term phrases found.');
+console.log(
+  'lint:copy OK — no banned phrases; SB140 SMS-consent + 3-day-cancel notices present.'
+);

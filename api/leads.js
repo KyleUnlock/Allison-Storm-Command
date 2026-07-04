@@ -11,6 +11,7 @@
  */
 
 const leads = require('../lib/leads');
+const consentLib = require('../lib/consent');
 const { readJson, sendJson } = require('../lib/http');
 
 const PUBLIC_SOURCES = new Set(['web', 'ad', 'rep']);
@@ -52,10 +53,26 @@ module.exports = async (req, res) => {
     }
   );
 
+  // SB140 SMS consent capture. Express opt-in from the homeowner's own form
+  // submission — distinct from the banned self-attested DNC/consent flags. This
+  // records SMS consent ONLY; it does NOT touch the lead's voice-DNC callable
+  // state, so a cold lead still isn't callable until DNC-scrubbed. Captured
+  // consent also never overrides an existing opt-out (see lib/consent).
+  let smsConsent = false;
+  if (body.smsConsent === true && lead.phone) {
+    await consentLib.recordConsent(lead.phone, {
+      source: 'web-intake',
+      leadId: lead.id,
+      actor: 'public',
+    });
+    smsConsent = true;
+  }
+
   return sendJson(res, 201, {
     ok: true,
     id: lead.id,
     status: lead.status,
     source: lead.source,
+    smsConsent,
   });
 };

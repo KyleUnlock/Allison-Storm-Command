@@ -20,6 +20,8 @@ const routes = {
   '/api/my-leads': require('./api/my-leads'),
   '/api/board': require('./api/board'),
   '/api/lead': require('./api/lead'),
+  '/api/export': require('./api/export'),
+  '/api/sms-optout': require('./api/sms-optout'),
   '/api/storm-status': require('./api/storm-status'),
   '/api/storm-import': require('./api/storm-import'),
   '/api/tasks': require('./api/tasks'),
@@ -33,6 +35,7 @@ const pages = {
   '/crm': 'crm.html',
   '/lead': 'lead.html',
   '/login': 'login.html',
+  '/notice': 'notice.html',
 };
 
 const CT = {

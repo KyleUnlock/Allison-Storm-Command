@@ -58,6 +58,13 @@
         <input id="address" name="address" autocomplete="street-address" />
         <label for="notes">Anything we should know?</label>
         <textarea id="notes" name="notes" rows="3"></textarea>
+        <label for="smsConsent" style="display:flex; gap:8px; align-items:flex-start; font-weight:400; margin-top:14px;">
+          <input type="checkbox" id="smsConsent" name="smsConsent" style="width:auto; margin-top:4px;" />
+          <span class="muted" id="smsConsentText">By checking this box, I give my express written consent to receive SMS text messages
+            from Allison Roofing at the phone number I provided about my free inspection and
+            storm-restoration project. Consent is not a condition of any purchase. Message and
+            data rates may apply. Reply STOP to opt out at any time; reply HELP for help.</span>
+        </label>
         <button type="submit" id="submitBtn">Request free inspection</button>
         <p class="muted">By submitting, you agree we may contact you about your inspection.
           We follow the National Do-Not-Call rules and TX HB 2102. We never market
@@ -65,6 +72,7 @@
         <p id="formMsg" role="status"></p>
       </form>
     </div>
+    <p class="muted" style="text-align:center;"><a href="/notice">Your 3-day right to cancel</a></p>
     <p class="muted" style="text-align:center;"><a href="/rep">Field rep login</a> · <a href="/login">Operator login</a></p>
   </main>
 
@@ -95,6 +103,7 @@
         zip: $('zip2').value,
         address: $('address').value,
         notes: $('notes').value,
+        smsConsent: $('smsConsent').checked,
       };
       if (!payload.phone && !payload.email) {
         msg.textContent = 'Please give a phone or email so we can reach you.';
