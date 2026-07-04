@@ -25,6 +25,24 @@
     .empty { text-align:center; color:#5b6b7c; padding:32px 12px; }
     .muted { color:#5b6b7c; font-size:.85rem; }
     select.stage { margin-top:8px; }
+    /* E1/E2 productivity UX */
+    .next { margin:8px 0; padding:10px 12px; border-radius:10px; background:#eef3f9; border-left:4px solid #2f6fb0; font-weight:600; }
+    .next.overdue { background:#fbe3e3; border-left-color:#9a2c2c; color:#9a2c2c; }
+    .next.due { background:#fff4e2; border-left-color:#c9772a; color:#8a4b12; }
+    .next.done { background:#e5f0e6; border-left-color:#166534; color:#166534; }
+    .cadence { font-size:.82rem; color:#5b6b7c; margin:2px 0 8px; }
+    .cadence.overdue { color:#9a2c2c; font-weight:700; }
+    .composer { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+    .composer button { flex:1 0 44%; background:#166534; }
+    .composer button.sms { background:#2f6fb0; }
+    .composer button:disabled { background:#b6c2ce; cursor:not-allowed; }
+    .notes { margin-top:10px; }
+    .notes .note { border-top:1px solid var(--line); padding:6px 0; font-size:.88rem; }
+    .notes .note .by { color:#5b6b7c; font-size:.75rem; }
+    .noteRow { display:flex; gap:8px; margin-top:8px; }
+    .noteRow input { flex:1; }
+    .noteRow button { flex:0 0 auto; background:#5b6b7c; }
+    details.timeline summary { cursor:pointer; font-weight:600; margin-top:8px; min-height:44px; display:flex; align-items:center; }
   </style>
 </head>
 <body>
@@ -80,6 +98,26 @@
       render(d.leads || []);
     }
 
+    const esc = (s)=> String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    function cadenceLine(c) {
+      if (!c || c.cadenceHours == null) return '';
+      if (c.overdue) return '<div class="cadence overdue">Follow-up overdue — suggested touch was '+esc(c.nextTouchAt)+'</div>';
+      const h = c.hoursUntilDue;
+      const due = h <= 0 ? 'now' : ('in ~'+h+'h');
+      return '<div class="cadence">Next touch '+due+' (every '+c.cadenceHours+'h at this stage)</div>';
+    }
+
+    function notesTimeline(l) {
+      const notes = l.notesLog || [];
+      const inner = notes.length
+        ? notes.slice().reverse().map(n => '<div class="note">'+esc(n.text)+'<div class="by">'+esc(n.author)+' · '+esc(n.at)+'</div></div>').join('')
+        : '<div class="muted" style="padding:6px 0;">No notes yet.</div>';
+      return '<details class="timeline"><summary>Notes ('+notes.length+')</summary><div class="notes">'+inner+
+        '<div class="noteRow"><input class="noteInput" placeholder="Add a note…" aria-label="Add a note" data-id="'+esc(l.id)+'">'+
+        '<button class="noteBtn" data-id="'+esc(l.id)+'">Add</button></div></div></details>';
+    }
+
     function render(leads) {
       const box = $('leads');
       if (!leads.length) { box.innerHTML = '<div class="empty">No leads assigned yet. New leads will appear here.</div>'; return; }
@@ -87,16 +125,28 @@
       for (const l of leads) {
         const el = document.createElement('div');
         el.className = 'lead';
+        const na = l.nextAction || { action:'', urgency:'normal' };
         const tel = l.callable && l.phone
-          ? '<a class="tel" href="tel:'+l.phone+'">Call '+l.phone+'</a>'
-          : '<span class="withheld">Call withheld ('+l.callReason+')</span>';
+          ? '<a class="tel" href="tel:'+esc(l.phone)+'">Call '+esc(l.phone)+'</a>'
+          : '<span class="withheld">Call withheld ('+esc(l.callReason)+')</span>';
+        // E2 composer: click-to-call / SMS. Each button HARD-checks the gate on
+        // the server; a blocked attempt shows the reason and dials/sends nothing.
+        const composer =
+          '<div class="composer">'+
+            '<button class="callBtn" data-id="'+esc(l.id)+'"'+(l.callable?'':' disabled title="'+esc(l.callReason)+'"')+'>Log call</button>'+
+            '<button class="sms smsBtn" data-id="'+esc(l.id)+'">Log SMS</button>'+
+          '</div>';
         el.innerHTML =
-          '<h3>'+(l.name||'(no name)')+'</h3>'+
-          '<div class="row"><span class="pill">'+l.status+'</span>'+
-          '<span class="pill">'+(l.source||'')+'</span>'+
-          '<span class="pill">ZIP '+(l.zip||'?')+'</span></div>'+
-          '<p class="muted">'+(l.address||'')+'</p>'+
+          '<h3>'+esc(l.name||'(no name)')+'</h3>'+
+          '<div class="next '+esc(na.urgency)+'">Next: '+esc(na.action)+'</div>'+
+          cadenceLine(l.cadence)+
+          '<div class="row"><span class="pill">'+esc(l.status)+'</span>'+
+          '<span class="pill">'+esc(l.source||'')+'</span>'+
+          '<span class="pill">ZIP '+esc(l.zip||'?')+'</span></div>'+
+          '<p class="muted">'+esc(l.address||'')+'</p>'+
           '<div class="row" style="margin:8px 0;">'+tel+'</div>'+
+          composer+
+          notesTimeline(l)+
           '<label>Move stage</label>';
         const sel = document.createElement('select');
         sel.className = 'stage';
@@ -107,6 +157,41 @@
         el.appendChild(sel);
         box.appendChild(el);
       }
+      // wire composer + note buttons
+      box.querySelectorAll('.callBtn').forEach(b => b.addEventListener('click', ()=> outreach(b.dataset.id, 'call')));
+      box.querySelectorAll('.smsBtn').forEach(b => b.addEventListener('click', ()=> outreach(b.dataset.id, 'sms')));
+      box.querySelectorAll('.noteBtn').forEach(b => b.addEventListener('click', ()=> {
+        const input = box.querySelector('.noteInput[data-id="'+b.dataset.id+'"]');
+        addNote(b.dataset.id, input ? input.value : '');
+      }));
+    }
+
+    // E2 — outreach attempt. The SERVER enforces the DNC/consent gate; this only
+    // records the compliant human touch. It never dials or texts from the page.
+    async function outreach(id, channel) {
+      const r = await fetch('/api/outreach-attempt', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, channel })
+      });
+      const d = await r.json().catch(()=>({}));
+      if (r.ok && d.permitted) {
+        alert(channel === 'call'
+          ? 'Call cleared — the number passed the DNC gate. Dial by hand now; the touch is logged.'
+          : 'SMS cleared — consent is on file and not opted out. Text by hand now; the touch is logged.');
+      } else if (r.ok) {
+        alert('Blocked ('+channel+'): '+(d.reason||'gate failed')+'. No call or text was made.');
+      } else {
+        alert(d.error || 'Outreach failed');
+      }
+      load();
+    }
+
+    async function addNote(id, text) {
+      if (!text || !text.trim()) return;
+      const r = await fetch('/api/my-leads', {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, note:text.trim() })
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); alert(d.error || 'Note failed'); }
+      load();
     }
 
     async function move(id, status) {

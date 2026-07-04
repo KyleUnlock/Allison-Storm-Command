@@ -14,7 +14,8 @@
     { "source": "/crm", "destination": "/crm.html" },
     { "source": "/lead", "destination": "/lead.html" },
     { "source": "/login", "destination": "/login.html" },
-    { "source": "/notice", "destination": "/notice.html" }
+    { "source": "/notice", "destination": "/notice.html" },
+    { "source": "/invoice", "destination": "/invoice.html" }
   ],
   "cleanUrls": true
 }

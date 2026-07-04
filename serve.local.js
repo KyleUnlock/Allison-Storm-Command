@@ -27,6 +27,8 @@ const routes = {
   '/api/tasks': require('./api/tasks'),
   '/api/meta-webhook': require('./api/meta-webhook'),
   '/api/callrail-webhook': require('./api/callrail-webhook'),
+  '/api/outreach-attempt': require('./api/outreach-attempt'),
+  '/api/invoice': require('./api/invoice'),
 };
 
 // pretty path -> html file (Vercel rewrites)
@@ -38,6 +40,7 @@ const pages = {
   '/lead': 'lead.html',
   '/login': 'login.html',
   '/notice': 'notice.html',
+  '/invoice': 'invoice.html',
 };
 
 const CT = {

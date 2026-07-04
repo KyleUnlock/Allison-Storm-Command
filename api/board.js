@@ -14,6 +14,7 @@ const auth = require('../lib/auth');
 const leads = require('../lib/leads');
 const dnc = require('../lib/dnc');
 const routing = require('../lib/routing');
+const productivity = require('../lib/productivity');
 const { readJson, sendJson } = require('../lib/http');
 
 function view(lead) {
@@ -43,6 +44,11 @@ function view(lead) {
     firstTouchAt: lead.firstTouchAt || null,
     slaBreached: sla.breached,
     sla,
+    // Phase E surfacing — productivity + note timeline + invoice payment state.
+    notesLog: lead.notesLog || [],
+    nextAction: productivity.nextAction(lead),
+    cadence: productivity.followUpCadence(lead),
+    paymentStatus: lead.paymentStatus || 'unpaid',
   };
 }
 
@@ -79,7 +85,17 @@ module.exports = async (req, res) => {
       if (body.claim && typeof body.claim === 'object') {
         updated = await leads.updateClaim(id, body.claim, { actor: 'operator' });
       }
-      // Status move (existing behavior). Both may be present in one PATCH.
+      // E1: append-only timeline note (author server-stamped as operator).
+      if (body.note !== undefined && String(body.note) !== '') {
+        updated = await leads.addNote(id, body.note, { actor: 'operator' });
+      }
+      // E3: invoice payment-state transition (unpaid|paid).
+      if (body.paymentStatus !== undefined && String(body.paymentStatus) !== '') {
+        updated = await leads.setPaymentStatus(id, String(body.paymentStatus), {
+          actor: 'operator',
+        });
+      }
+      // Status move (existing behavior). Any of these may be present in one PATCH.
       if (body.status !== undefined && String(body.status) !== '') {
         updated = await leads.updateStatus(id, String(body.status), {
           actor: 'operator',
@@ -94,7 +110,10 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { ok: true, lead: view(updated) });
     } catch (e) {
       const code =
-        e.code === 'BAD_STATUS' || e.code === 'BAD_CLAIM_STATUS'
+        e.code === 'BAD_STATUS' ||
+        e.code === 'BAD_CLAIM_STATUS' ||
+        e.code === 'BAD_PAYMENT_STATUS' ||
+        e.code === 'EMPTY_NOTE'
           ? 400
           : e.code === 'NOT_FOUND'
             ? 404

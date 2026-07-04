@@ -51,6 +51,12 @@
       if (!r.ok) { document.getElementById('msg').innerHTML = '<span class="err">Lead not found.</span>'; return; }
       const { lead:l } = await r.json();
       const hist = (l.history||[]).map(h => '<div class="hist">'+esc(h.at)+' → '+esc(h.status)+' ('+esc(h.actor)+')</div>').join('');
+      const timeline = (l.notesLog||[]).length
+        ? (l.notesLog||[]).slice().reverse().map(n => '<div class="hist">'+esc(n.at)+' · '+esc(n.author)+': '+esc(n.text)+'</div>').join('')
+        : '<div class="hist">— no notes —</div>';
+      const invoiceLink = (l.status === 'won')
+        ? '<dt>Invoice</dt><dd><a href="/invoice?id='+esc(l.id)+'">View invoice / receipt →</a> · payment: '+esc(l.paymentStatus||'unpaid')+'</dd>'
+        : '';
       const won = l.won ? '<dt>Won / billing</dt><dd>Collected '+money(l.won.collected)+' · Costs '+money(l.won.costs)+
         ' · Profit '+money(l.won.profit)+' · Fee '+money(l.won.fee)+' ('+esc(l.won.reason)+')</dd>' : '';
       const c = l.claim || {};
@@ -69,9 +75,17 @@
             (l.slaBreached?' <span class="badge sla">breached</span>':'')+'</dd>'+
           claimView(c)+
           '<dt>Notes</dt><dd>'+esc(l.notes||'—')+'</dd>'+
+          '<dt>Note timeline</dt><dd>'+timeline+'</dd>'+
+          invoiceLink+
           won+
           '<dt>History</dt><dd>'+(hist||'—')+'</dd>'+
         '</dl>'+
+        // E1 add-note (append-only) — rides the operator-scoped /api/board PATCH.
+        '<form class="claimForm" id="noteForm">'+
+          '<strong>Add a note</strong>'+
+          '<input id="noteText" placeholder="Note (server-stamps you + the time)">'+
+          '<button type="submit">Add note</button>'+
+        '</form>'+
         // C1 claim editor — rides the operator-scoped /api/board PATCH path.
         '<form class="claimForm" id="claimForm">'+
           '<strong>Update insurance claim</strong>'+
@@ -82,6 +96,16 @@
           '<button type="submit">Save claim</button>'+
         '</form>';
       document.getElementById('claimForm').addEventListener('submit', saveClaim);
+      document.getElementById('noteForm').addEventListener('submit', saveNote);
+    }
+
+    async function saveNote(e) {
+      e.preventDefault();
+      const text = document.getElementById('noteText').value;
+      if (!text.trim()) return;
+      const r = await fetch('/api/board', { method:'PATCH', headers:PH, body:JSON.stringify({ id, note:text.trim() }) });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); alert(d.error||'Note failed'); return; }
+      load();
     }
 
     async function saveClaim(e) {
