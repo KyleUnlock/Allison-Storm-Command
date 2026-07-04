@@ -21,6 +21,11 @@
     .card .meta { color:#5b6b7c; font-size:.78rem; }
     .card select { width:100%; margin-top:6px; padding:6px; border:1px solid var(--line); border-radius:6px; min-height:36px; }
     .empty { color:#8494a4; font-size:.8rem; padding:8px 4px; }
+    .badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:.7rem; font-weight:700; margin-right:4px; }
+    .badge.claim { background:#e6eef8; color:#274b73; }
+    .badge.score { background:#e5f0e6; color:#166534; }
+    .badge.sla { background:#fbe3e3; color:#9a2c2c; }
+    .card .badges { margin:4px 0; }
   </style>
 </head>
 <body>
@@ -31,10 +36,12 @@
   <div class="rail" id="rail"></div>
   <script>
     const STAGES = ['new','contacted','inspection','inspected','quoted','negotiation','won','production','completed'];
+    const CLAIM_STATUSES = ['filed','inspection_scheduled','approved','supplement','paid','denied'];
     const pw = sessionStorage.getItem('boardPw');
     if (!pw) location.href = '/login';
     const H = { 'X-Board-Password': pw, 'Content-Type':'application/json' };
     const money = (n) => '$' + (Number(n||0)).toLocaleString();
+    const esc = (s)=> String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     document.getElementById('signout').addEventListener('click', (e)=>{ e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href='/login'; });
 
@@ -54,6 +61,13 @@
       }
       const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); alert(e.error||'Update failed'); }
+      load();
+    }
+
+    // C1 claim milestone quick-edit — SAME operator-scoped /api/board PATCH path.
+    async function setClaim(id, status) {
+      const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify({ id, claim:{ status } }) });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.error||'Claim update failed'); }
       load();
     }
 
@@ -90,14 +104,27 @@
           const card = document.createElement('div');
           card.className = 'card'; card.draggable = true;
           card.addEventListener('dragstart', (e)=> e.dataTransfer.setData('text/plain', l.id));
-          card.innerHTML = '<h3>'+(l.name||'(no name)')+'</h3>'+
-            '<div class="meta">'+(l.source||'')+' · ZIP '+(l.zip||'?')+(l.assignedRep?(' · '+l.assignedRep):'')+'</div>'+
+          const claim = l.claim || {};
+          const badges =
+            (l.score!=null?'<span class="badge score">'+esc(l.score)+'</span>':'')+
+            (claim.status?'<span class="badge claim">claim: '+esc(claim.status)+'</span>':'')+
+            (l.slaBreached?'<span class="badge sla">SLA!</span>':'');
+          card.innerHTML = '<h3>'+esc(l.name||'(no name)')+'</h3>'+
+            (badges?('<div class="badges">'+badges+'</div>'):'')+
+            '<div class="meta">'+esc(l.source||'')+' · ZIP '+esc(l.zip||'?')+(l.assignedRep?(' · '+esc(l.assignedRep)):'')+'</div>'+
             (l.won?('<div class="meta">'+money(l.won.collected)+' · fee '+money(l.won.fee)+'</div>'):'');
           // touch fallback — SAME moveLead path as drag-drop
           const sel = document.createElement('select');
           sel.innerHTML = STAGES.map(s=>'<option value="'+s+'"'+(s===stage?' selected':'')+'>'+s+'</option>').join('');
           sel.addEventListener('change', ()=> moveLead(l.id, sel.value));
           card.appendChild(sel);
+          // C1 claim milestone select (compact editor on the card).
+          const csel = document.createElement('select');
+          csel.innerHTML = ['<option value="">claim…</option>'].concat(
+            CLAIM_STATUSES.map(s=>'<option value="'+s+'"'+(s===(claim.status||'')?' selected':'')+'>claim: '+s+'</option>')
+          ).join('');
+          csel.addEventListener('change', ()=> { if (csel.value) setClaim(l.id, csel.value); });
+          card.appendChild(csel);
           col.appendChild(card);
         }
         rail.appendChild(col);

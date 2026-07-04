@@ -8,6 +8,7 @@
 const auth = require('../lib/auth');
 const leads = require('../lib/leads');
 const dnc = require('../lib/dnc');
+const routing = require('../lib/routing');
 const { sendJson, urlOf } = require('../lib/http');
 
 module.exports = async (req, res) => {
@@ -28,7 +29,14 @@ module.exports = async (req, res) => {
   }
 
   const call = dnc.isCallable(lead);
+  const sla = routing.checkSla(lead);
   return sendJson(res, 200, {
-    lead: { ...lead, callable: call.callable, callReason: call.reason },
+    lead: {
+      ...lead,
+      callable: call.callable,
+      callReason: call.reason,
+      slaBreached: sla.breached,
+      sla,
+    },
   });
 };

@@ -13,10 +13,12 @@
 const auth = require('../lib/auth');
 const leads = require('../lib/leads');
 const dnc = require('../lib/dnc');
+const routing = require('../lib/routing');
 const { readJson, sendJson } = require('../lib/http');
 
 function view(lead) {
   const call = dnc.isCallable(lead);
+  const sla = routing.checkSla(lead);
   return {
     id: lead.id,
     status: lead.status,
@@ -32,6 +34,13 @@ function view(lead) {
     callReason: call.reason,
     won: lead.won,
     createdAt: lead.createdAt,
+    // Phase C surfacing.
+    score: lead.score == null ? null : lead.score,
+    claim: lead.claim || null,
+    assignedAt: lead.assignedAt || null,
+    firstTouchAt: lead.firstTouchAt || null,
+    slaBreached: sla.breached,
+    sla,
   };
 }
 
@@ -41,7 +50,10 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    const all = (await leads.listLeads()).map(view);
+    const all = (await leads.listLeads())
+      .map(view)
+      // Surface highest-priority leads first (C2 score).
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
     const wonTotal = all
       .filter((l) => l.status === 'won' && l.won)
       .reduce((sum, l) => sum + (l.won.collected || 0), 0);
@@ -59,18 +71,32 @@ module.exports = async (req, res) => {
   if (req.method === 'PATCH' || req.method === 'POST') {
     const body = await readJson(req);
     const id = String(body.id || '');
-    const status = String(body.status || '');
     try {
-      const updated = await leads.updateStatus(id, status, {
-        actor: 'operator',
-        collected: body.collected,
-        costs: body.costs,
-        contractDate: body.contractDate,
-      });
+      let updated = null;
+      // C1: claim ladder edit rides the SAME operator-scoped PATCH path.
+      if (body.claim && typeof body.claim === 'object') {
+        updated = await leads.updateClaim(id, body.claim, { actor: 'operator' });
+      }
+      // Status move (existing behavior). Both may be present in one PATCH.
+      if (body.status !== undefined && String(body.status) !== '') {
+        updated = await leads.updateStatus(id, String(body.status), {
+          actor: 'operator',
+          collected: body.collected,
+          costs: body.costs,
+          contractDate: body.contractDate,
+        });
+      }
+      if (!updated) {
+        return sendJson(res, 400, { error: 'nothing to update' });
+      }
       return sendJson(res, 200, { ok: true, lead: view(updated) });
     } catch (e) {
       const code =
-        e.code === 'BAD_STATUS' ? 400 : e.code === 'NOT_FOUND' ? 404 : 500;
+        e.code === 'BAD_STATUS' || e.code === 'BAD_CLAIM_STATUS'
+          ? 400
+          : e.code === 'NOT_FOUND'
+            ? 404
+            : 500;
       return sendJson(res, code, { error: e.message });
     }
   }

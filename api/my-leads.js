@@ -13,10 +13,12 @@
 const auth = require('../lib/auth');
 const leads = require('../lib/leads');
 const dnc = require('../lib/dnc');
+const routing = require('../lib/routing');
 const { readJson, sendJson } = require('../lib/http');
 
 function view(lead) {
   const call = dnc.isCallable(lead);
+  const sla = routing.checkSla(lead);
   return {
     id: lead.id,
     status: lead.status,
@@ -31,6 +33,13 @@ function view(lead) {
     callable: call.callable,
     callReason: call.reason,
     won: lead.won,
+    // Phase C surfacing.
+    score: lead.score == null ? null : lead.score,
+    claim: lead.claim || null,
+    assignedAt: lead.assignedAt || null,
+    firstTouchAt: lead.firstTouchAt || null,
+    slaBreached: sla.breached,
+    sla,
   };
 }
 
@@ -50,7 +59,6 @@ module.exports = async (req, res) => {
   if (req.method === 'PATCH' || req.method === 'POST') {
     const body = await readJson(req);
     const id = String(body.id || '');
-    const status = String(body.status || '');
     const lead = await leads.getLead(id);
     if (!lead) return sendJson(res, 404, { error: 'lead not found' });
 
@@ -59,22 +67,34 @@ module.exports = async (req, res) => {
       return sendJson(res, 403, { error: 'not your lead' });
     }
 
-    // claim if unassigned — assignment is server-stamped from the session.
+    // claim if unassigned — assignment is server-stamped from the session, and
+    // the SLA clock starts on this server-side claim if not already running.
     if (!lead.assignedRep) {
       lead.assignedRep = rep;
+      if (!lead.assignedAt) lead.assignedAt = new Date().toISOString();
       await leads.saveLead(lead);
     }
 
     try {
-      const updated = await leads.updateStatus(id, status, {
-        actor: rep, // from session, never body
-        collected: body.collected,
-        costs: body.costs,
-        contractDate: body.contractDate,
-      });
+      let updated = null;
+      // C1: claim ladder edit rides the SAME rep-scoped PATCH path.
+      if (body.claim && typeof body.claim === 'object') {
+        updated = await leads.updateClaim(id, body.claim, { actor: rep });
+      }
+      // Status move (existing behavior). Both may be present in one PATCH.
+      if (body.status !== undefined && String(body.status) !== '') {
+        updated = await leads.updateStatus(id, String(body.status), {
+          actor: rep, // from session, never body
+          collected: body.collected,
+          costs: body.costs,
+          contractDate: body.contractDate,
+        });
+      }
+      if (!updated) return sendJson(res, 400, { error: 'nothing to update' });
       return sendJson(res, 200, { ok: true, lead: view(updated) });
     } catch (e) {
-      const code = e.code === 'BAD_STATUS' ? 400 : 500;
+      const code =
+        e.code === 'BAD_STATUS' || e.code === 'BAD_CLAIM_STATUS' ? 400 : 500;
       return sendJson(res, code, { error: e.message });
     }
   }

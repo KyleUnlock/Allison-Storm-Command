@@ -37,7 +37,7 @@
       <div class="stat"><span>Fees (20% of profit)</span><b id="feeTotal">–</b></div>
     </div>
     <div class="wrap"><table id="tbl"><thead>
-      <tr><th>Name</th><th>Status</th><th>Source</th><th>ZIP</th><th>Rep</th><th>Callable</th><th>Won $</th><th>Fee</th><th></th></tr>
+      <tr><th>Name</th><th>Score</th><th>Status</th><th>Source</th><th>ZIP</th><th>Rep</th><th>SLA</th><th>Callable</th><th>Won $</th><th>Fee</th><th></th></tr>
     </thead><tbody id="rows"></tbody></table></div>
     <div id="empty" class="empty" hidden>No leads yet. Homeowner intake at <a href="/">/</a> will populate this board.</div>
   </main>
@@ -65,10 +65,12 @@
         const sel = STAGES.map(s => '<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>').join('');
         tr.innerHTML =
           '<td>'+(l.name||'(no name)')+'</td>'+
+          '<td>'+(l.score!=null?l.score:'—')+'</td>'+
           '<td><select data-id="'+l.id+'">'+sel+'</select></td>'+
           '<td>'+(l.source||'')+'</td>'+
           '<td>'+(l.zip||'')+'</td>'+
           '<td>'+(l.assignedRep||'—')+'</td>'+
+          '<td class="'+(l.slaBreached?'withheld':'')+'">'+(l.slaBreached?'breached':(l.assignedAt?'ok':'—'))+'</td>'+
           '<td class="'+(l.callable?'callable':'withheld')+'">'+(l.callable?'yes':'no')+'</td>'+
           '<td>'+(l.won?money(l.won.collected):'—')+'</td>'+
           '<td>'+(l.won?money(l.won.fee):'—')+'</td>'+
