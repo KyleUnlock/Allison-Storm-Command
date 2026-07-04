@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Analytics</title>
+  <style>
+    :root { --navy:#0f2740; --sky:#2f6fb0; --line:#d8e0ea; --bg:#f4f7fb; --good:#166534; --bad:#9a2c2c; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#16202b; background:var(--bg); }
+    header { background:var(--navy); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    header h1 { font-size:1.05rem; margin:0; }
+    header a { color:#cfe0f5; }
+    main { max-width:1100px; margin:0 auto; padding:14px; }
+    h2 { font-size:1rem; margin:22px 0 10px; color:var(--navy); }
+    .totals { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+    .stat { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:130px; }
+    .stat span { color:#5b6b7c; font-size:.85rem; }
+    .stat b { display:block; font-size:1.3rem; }
+    .badge { display:inline-block; min-height:44px; line-height:44px; padding:0 16px; border-radius:10px; font-weight:700; color:#fff; }
+    .badge.ok { background:var(--good); } .badge.broken { background:var(--bad); }
+    .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .wrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
+    table { border-collapse:collapse; width:100%; min-width:520px; }
+    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th { background:#eef3f9; }
+    td.num, th.num { text-align:right; }
+    .funnel-row { display:flex; align-items:center; gap:10px; margin:6px 0; }
+    .funnel-label { width:110px; flex:none; text-transform:capitalize; }
+    .bar-track { flex:1; background:#eef3f9; border-radius:6px; overflow:hidden; min-height:24px; }
+    .bar-fill { background:var(--sky); min-height:24px; border-radius:6px; }
+    .funnel-meta { width:120px; flex:none; text-align:right; color:#5b6b7c; font-size:.85rem; }
+    .empty { text-align:center; color:#5b6b7c; padding:28px; }
+    .muted { color:#5b6b7c; font-size:.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Analytics &amp; Reporting</h1>
+    <span><a href="/board">← Board</a> · <a href="/crm">CRM</a> · <a href="#" id="signout">Sign out</a></span>
+  </header>
+  <main>
+    <div class="totals">
+      <div class="stat"><span>Leads</span><b id="tLeads">–</b></div>
+      <div class="stat"><span>Won</span><b id="tWon">–</b></div>
+      <div class="stat"><span>Lead → Won</span><b id="tWonRate">–</b></div>
+      <div class="stat"><span>UnlockAI fee (20% of profit)</span><b id="tFee">–</b></div>
+      <div class="stat"><span>Ledger integrity</span><span id="ledgerBadge" class="badge ok" style="margin-top:4px;">–</span></div>
+    </div>
+
+    <h2>Funnel</h2>
+    <div class="card" id="funnelCard"><div class="empty" id="funnelEmpty" hidden>No leads yet.</div><div id="funnel"></div></div>
+
+    <h2>Source ROI</h2>
+    <div class="wrap"><table id="roiTbl"><thead>
+      <tr><th>Group</th><th class="num">Leads</th><th class="num">Won</th><th class="num">Profit</th><th class="num">UnlockAI fee (20% of profit)</th></tr>
+    </thead><tbody id="roiRows"></tbody></table></div>
+    <div class="empty" id="roiEmpty" hidden>No source data yet.</div>
+
+    <h2>First-touch SLA</h2>
+    <div class="totals">
+      <div class="stat"><span>Breach rate</span><b id="slaRate">–</b></div>
+      <div class="stat"><span>Breached</span><b id="slaBreached">–</b></div>
+      <div class="stat"><span>Median first-touch</span><b id="slaMedian">–</b></div>
+      <div class="stat"><span>Avg first-touch</span><b id="slaAvg">–</b></div>
+    </div>
+
+    <h2>Rep leaderboard</h2>
+    <div class="wrap"><table id="lbTbl"><thead>
+      <tr><th>Rep</th><th class="num">Assigned</th><th class="num">Worked</th><th class="num">Won</th><th class="num">UnlockAI fee (20% of profit)</th></tr>
+    </thead><tbody id="lbRows"></tbody></table></div>
+    <div class="empty" id="lbEmpty" hidden>No reps assigned yet.</div>
+
+    <p class="muted" id="genAt"></p>
+  </main>
+  <script>
+    const pw = sessionStorage.getItem('boardPw');
+    if (!pw) location.href = '/login';
+    const H = { 'X-Board-Password': pw, 'Content-Type': 'application/json' };
+    const money = (n) => '$' + (Number(n || 0)).toLocaleString();
+    const pct = (r) => (Number(r || 0) * 100).toFixed(1) + '%';
+    const mins = (m) => (m == null ? '—' : Math.round(m) + ' min');
+
+    document.getElementById('signout').addEventListener('click', (e) => {
+      e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href = '/login';
+    });
+
+    async function load() {
+      const r = await fetch('/api/report', { headers: H });
+      if (r.status === 401) { location.href = '/login'; return; }
+      const d = await r.json();
+
+      document.getElementById('tLeads').textContent = d.totals.leads;
+      document.getElementById('tWon').textContent = d.totals.won;
+      document.getElementById('tWonRate').textContent = pct(d.totals.wonRate);
+      document.getElementById('tFee').textContent = money(d.fee.total);
+
+      const badge = document.getElementById('ledgerBadge');
+      if (d.ledger.valid) { badge.className = 'badge ok'; badge.textContent = 'Valid'; }
+      else { badge.className = 'badge broken'; badge.textContent = 'BROKEN @ ' + d.ledger.brokenAt; }
+
+      // Funnel bars — scaled to the widest (first) stage's reach.
+      const fEl = document.getElementById('funnel');
+      const max = Math.max(1, ...d.funnel.stages.map((s) => s.reached));
+      document.getElementById('funnelEmpty').hidden = d.totals.leads > 0;
+      fEl.innerHTML = d.funnel.stages.map((s) =>
+        '<div class="funnel-row">' +
+          '<div class="funnel-label">' + s.stage + '</div>' +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round((s.reached / max) * 100) + '%"></div></div>' +
+          '<div class="funnel-meta">' + s.reached + ' · ' + pct(s.conversionFromPrev) + '</div>' +
+        '</div>'
+      ).join('');
+
+      // Source ROI — merged across source / adSource / campaign groupings.
+      const roi = [
+        ...d.sourceRoi.bySource.map((g) => ({ ...g, label: 'source: ' + g.key })),
+        ...d.sourceRoi.byAdSource.map((g) => ({ ...g, label: 'ad: ' + g.key })),
+        ...d.sourceRoi.byCampaign.map((g) => ({ ...g, label: 'campaign: ' + g.key })),
+      ];
+      document.getElementById('roiEmpty').hidden = roi.length > 0;
+      document.getElementById('roiRows').innerHTML = roi.map((g) =>
+        '<tr><td>' + g.label + '</td><td class="num">' + g.leads + '</td><td class="num">' + g.won +
+        '</td><td class="num">' + money(g.profit) + '</td><td class="num">' + money(g.fee) + '</td></tr>'
+      ).join('');
+
+      document.getElementById('slaRate').textContent = pct(d.sla.breachRate);
+      document.getElementById('slaBreached').textContent = d.sla.breached + ' / ' + d.sla.total;
+      document.getElementById('slaMedian').textContent = d.sla.touchedCount ? mins(d.sla.medianMinutes) : '—';
+      document.getElementById('slaAvg').textContent = d.sla.touchedCount ? mins(d.sla.avgMinutes) : '—';
+
+      document.getElementById('lbEmpty').hidden = d.leaderboard.length > 0;
+      document.getElementById('lbRows').innerHTML = d.leaderboard.map((g) =>
+        '<tr><td>' + g.rep + '</td><td class="num">' + g.assigned + '</td><td class="num">' + g.worked +
+        '</td><td class="num">' + g.won + '</td><td class="num">' + money(g.fee) + '</td></tr>'
+      ).join('');
+
+      document.getElementById('genAt').textContent = 'Generated ' + d.generatedAt;
+    }
+    load();
+  </script>
+</body>
+</html>
