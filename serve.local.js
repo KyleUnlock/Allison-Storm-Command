@@ -30,6 +30,7 @@ const routes = {
   '/api/callrail-webhook': require('./api/callrail-webhook'),
   '/api/outreach-attempt': require('./api/outreach-attempt'),
   '/api/invoice': require('./api/invoice'),
+  '/api/health': require('./api/health'),
 };
 
 // pretty path -> html file (Vercel rewrites)

@@ -55,6 +55,29 @@ global `fetch`). KV falls back to an in-memory Map when `KV_REST_API_URL` /
 See `.env.example`. Real passcodes/keys are provided at deploy time via Vercel
 env and are **never** committed.
 
+## Operations
+
+Launch-hardening and enablement live under `docs/` (all **staged** for review —
+nothing is sent):
+
+- **[docs/RUNBOOK.md](docs/RUNBOOK.md)** — operator runbook: every env var,
+  local run + smoke, deploy handoff, KV setup, webhook rotation, DNC wiring,
+  incident/rollback, and the ledger-integrity procedure.
+- **[docs/REP-QUICKSTART.md](docs/REP-QUICKSTART.md)** — Terrell-facing rep
+  quickstart (login → claim → consent-gated outreach → notes → stages).
+- **[docs/BOARD-ACCESS.md](docs/BOARD-ACCESS.md)** — Chance/operator `/board` +
+  `/report` access prep.
+
+```bash
+npm run preflight              # assert required fence env NAMES before go-live (no values printed)
+curl -s localhost:4010/health  # {ok:true, ts, checks:{store, ledger}} — public, no PII
+```
+
+`preflight` exits non-zero if a required var (`SESSION_SECRET`, `LEDGER_SECRET`,
+`KV_REST_API_URL`, `KV_REST_API_TOKEN`, `BOARD_PASSWORD`) is missing; the
+webhook/CRON/DNC/notify vars are ship-dark WARNs. `/health` is side-effect-free
+and reports store reachability + ledger integrity.
+
 ## Deploy
 
 ```bash

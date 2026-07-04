@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test test/*.test.js && npm run lint:copy",
     "lint:copy": "node scripts/lint-copy.js",
+    "preflight": "node scripts/preflight.js",
     "start": "node serve.local.js",
     "smoke": "bash smoke.sh"
   },
