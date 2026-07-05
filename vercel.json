@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/*.js": {
+      "memory": 256,
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/rep", "destination": "/rep.html" },
+    { "source": "/board", "destination": "/board.html" },
+    { "source": "/report", "destination": "/report.html" },
+    { "source": "/crm", "destination": "/crm.html" },
+    { "source": "/lead", "destination": "/lead.html" },
+    { "source": "/login", "destination": "/login.html" },
+    { "source": "/notice", "destination": "/notice.html" },
+    { "source": "/invoice", "destination": "/invoice.html" },
+    { "source": "/health", "destination": "/api/health" }
+  ],
+  "cleanUrls": true
+}

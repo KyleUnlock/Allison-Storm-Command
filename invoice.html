@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Invoice / Receipt</title>
+  <style>
+    body { margin:0; font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#16202b; background:#f4f7fb; }
+    header { background:#0f2740; color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    header a { color:#cfe0f5; }
+    main { max-width:680px; margin:0 auto; padding:16px; }
+    .card { background:#fff; border:1px solid #d8e0ea; border-radius:12px; padding:20px; margin:14px 0; }
+    h2 { margin-top:0; }
+    table { width:100%; border-collapse:collapse; margin:10px 0; }
+    td, th { text-align:left; padding:8px 6px; border-bottom:1px solid #eef3f9; }
+    td.amt, th.amt { text-align:right; font-variant-numeric:tabular-nums; }
+    .total td { font-weight:800; border-top:2px solid #d8e0ea; border-bottom:0; }
+    .muted { color:#5b6b7c; font-size:.85rem; }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.82rem; word-break:break-all; }
+    .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75rem; font-weight:700; }
+    .badge.paid { background:#e5f0e6; color:#166534; } .badge.unpaid { background:#fbe9d8; color:#8a4b12; }
+    .badge.zero { background:#eef1f5; color:#5b6b7c; }
+    .notice { background:#fff8ec; border:1px solid #f0dfb8; border-radius:10px; padding:14px; }
+    .empty { text-align:center; color:#5b6b7c; padding:32px 12px; }
+    .err { color:#9a2c2c; }
+    button { min-height:44px; padding:0 16px; font-size:1rem; font-weight:700; color:#fff; background:#2f6fb0; border:0; border-radius:10px; cursor:pointer; }
+    button.ghost { background:#5b6b7c; }
+  </style>
+</head>
+<body>
+  <header>
+    <span><a href="/board">← Board</a> · Invoice / Receipt</span>
+    <button class="ghost" id="printBtn" style="min-height:38px;">Print</button>
+  </header>
+  <main>
+    <div class="card" id="wrap"><p id="msg" class="empty">Loading…</p></div>
+  </main>
+  <script>
+    const money = (n) => '$' + (Number(n||0)).toLocaleString('en-US');
+    const esc = (s)=> String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const id = new URL(location.href).searchParams.get('id');
+    const pw = sessionStorage.getItem('boardPw');
+    const H = pw ? { 'X-Board-Password': pw, 'Content-Type':'application/json' } : { 'Content-Type':'application/json' };
+    document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+
+    async function load() {
+      if (!id) { document.getElementById('msg').textContent = 'No lead id.'; return; }
+      const r = await fetch('/api/invoice?id='+encodeURIComponent(id), { headers:H });
+      if (r.status === 401) { location.href = '/login'; return; }
+      if (r.status === 409) { document.getElementById('wrap').innerHTML = '<div class="empty">This lead is not <strong>won</strong> yet — no invoice to show. An invoice is generated once a deal is marked won.</div>'; return; }
+      if (!r.ok) { document.getElementById('wrap').innerHTML = '<p class="err">Invoice not available.</p>'; return; }
+      const { invoice: inv } = await r.json();
+      render(inv);
+    }
+
+    function render(inv) {
+      const payClass = inv.paymentStatus === 'paid' ? 'paid' : 'unpaid';
+      const feeBadge = inv.billable ? '' : '<span class="badge zero">$0 — '+esc(inv.reason)+'</span>';
+      const cancel = inv.cancelNoticeApplies
+        ? '<div class="card notice"><strong>'+esc(inv.cancelNoticeTitle)+'</strong><p id="cancelNotice">'+esc(inv.cancelNotice)+'</p></div>'
+        : '<p class="muted">The three-day right-to-cancel window for this transaction has passed; no cancellation notice is attached to this receipt.</p>';
+
+      document.getElementById('wrap').innerHTML =
+        '<h2 style="margin-bottom:2px;">Invoice '+esc(inv.invoiceId)+'</h2>'+
+        '<div class="muted">Issued '+esc(inv.issuedAt)+' · <span class="badge '+payClass+'">'+esc(inv.paymentStatus)+'</span> '+feeBadge+'</div>'+
+        '<table>'+
+          '<tr><th>Description</th><th class="amt">Amount</th></tr>'+
+          '<tr><td>Collected revenue</td><td class="amt">'+money(inv.collected)+'</td></tr>'+
+          '<tr><td>Direct job costs</td><td class="amt">− '+money(inv.costs)+'</td></tr>'+
+          '<tr><td>Profit</td><td class="amt">'+money(inv.profit)+'</td></tr>'+
+          '<tr class="total"><td>Platform fee ('+esc(inv.dealTerm)+')</td><td class="amt">'+money(inv.fee)+'</td></tr>'+
+        '</table>'+
+        '<p class="muted">Contract date '+esc(inv.contractDate)+' · 90-day window ends '+esc(inv.windowEnd)+'</p>'+
+        '<p class="muted">Attribution (hash-chained, server-stamped):</p>'+
+        '<p class="mono">'+esc(inv.attribution.token || '(none)')+'</p>'+
+        cancel;
+    }
+    load();
+  </script>
+</body>
+</html>

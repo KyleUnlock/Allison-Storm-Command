@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allison Roofing — Free Storm Damage Inspection</title>
+  <style>
+    :root { --navy:#0f2740; --sky:#2f6fb0; --ink:#16202b; --line:#d8e0ea; --bg:#f4f7fb; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+    header { background:var(--navy); color:#fff; padding:20px 16px; }
+    header h1 { margin:0; font-size:1.25rem; }
+    header p { margin:4px 0 0; opacity:.85; font-size:.9rem; }
+    main { max-width:560px; margin:0 auto; padding:16px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin:16px 0; }
+    .banner { background:#eaf2fb; border:1px solid #cfe0f5; border-radius:12px; padding:14px 16px; }
+    label { display:block; font-weight:600; margin:12px 0 4px; }
+    input, textarea { width:100%; padding:12px; font-size:16px; border:1px solid var(--line); border-radius:8px; }
+    button { width:100%; min-height:48px; margin-top:16px; font-size:1rem; font-weight:700; color:#fff; background:var(--sky); border:0; border-radius:10px; cursor:pointer; }
+    button:disabled { opacity:.6; }
+    .muted { color:#5b6b7c; font-size:.85rem; }
+    .ok { color:#166534; font-weight:600; }
+    .err { color:#9a2c2c; font-weight:600; }
+    a { color:var(--sky); }
+    .zoneline { display:flex; gap:8px; }
+    .zoneline input { flex:1; }
+    .zoneline button { width:auto; margin-top:0; padding:0 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Allison Roofing — Storm Restoration</h1>
+    <p>Free, no-obligation roof inspection for North Texas homeowners.</p>
+  </header>
+  <main>
+    <div class="banner" id="stormBanner">
+      <strong>Check your area.</strong> We monitor National Weather Service hail reports.
+      Enter your ZIP to see recent activity.
+      <div class="zoneline" style="margin-top:10px;">
+        <input id="zip" inputmode="numeric" maxlength="5" placeholder="ZIP code" aria-label="ZIP code" />
+        <button type="button" id="checkBtn">Check</button>
+      </div>
+      <p class="muted" id="stormResult" style="margin:10px 0 0;"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Request your free inspection</h2>
+      <form id="leadForm" novalidate>
+        <label for="name">Name</label>
+        <input id="name" name="name" autocomplete="name" />
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" inputmode="tel" autocomplete="tel" />
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" />
+        <label for="zip2">Property ZIP</label>
+        <input id="zip2" name="zip" inputmode="numeric" maxlength="5" />
+        <label for="address">Address</label>
+        <input id="address" name="address" autocomplete="street-address" />
+        <label for="notes">Anything we should know?</label>
+        <textarea id="notes" name="notes" rows="3"></textarea>
+        <label for="smsConsent" style="display:flex; gap:8px; align-items:flex-start; font-weight:400; margin-top:14px;">
+          <input type="checkbox" id="smsConsent" name="smsConsent" style="width:auto; margin-top:4px;" />
+          <span class="muted" id="smsConsentText">By checking this box, I give my express written consent to receive SMS text messages
+            from Allison Roofing at the phone number I provided about my free inspection and
+            storm-restoration project. Consent is not a condition of any purchase. Message and
+            data rates may apply. Reply STOP to opt out at any time; reply HELP for help.</span>
+        </label>
+        <button type="submit" id="submitBtn">Request free inspection</button>
+        <p class="muted">By submitting, you agree we may contact you about your inspection.
+          We follow the National Do-Not-Call rules and TX HB 2102. We never market
+          insurance-fee absorption.</p>
+        <p id="formMsg" role="status"></p>
+      </form>
+    </div>
+    <p class="muted" style="text-align:center;"><a href="/notice">Your 3-day right to cancel</a></p>
+    <p class="muted" style="text-align:center;"><a href="/rep">Field rep login</a> · <a href="/login">Operator login</a></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    $('checkBtn').addEventListener('click', async () => {
+      const zip = $('zip').value.replace(/\D/g, '').slice(0, 5);
+      $('stormResult').textContent = 'Checking…';
+      try {
+        const r = await fetch('/api/storm-status?zip=' + encodeURIComponent(zip));
+        const d = await r.json();
+        $('stormResult').textContent = d.blurb || d.headline;
+        if (zip) $('zip2').value = zip;
+      } catch { $('stormResult').textContent = 'Could not check right now.'; }
+    });
+
+    $('leadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('formMsg');
+      const btn = $('submitBtn');
+      msg.textContent = ''; msg.className = '';
+      const payload = {
+        source: 'web',
+        name: $('name').value,
+        phone: $('phone').value,
+        email: $('email').value,
+        zip: $('zip2').value,
+        address: $('address').value,
+        notes: $('notes').value,
+        smsConsent: $('smsConsent').checked,
+      };
+      if (!payload.phone && !payload.email) {
+        msg.textContent = 'Please give a phone or email so we can reach you.';
+        msg.className = 'err'; return;
+      }
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/leads', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          msg.textContent = 'Thanks! A local specialist will reach out to schedule your free inspection.';
+          msg.className = 'ok';
+          e.target.reset();
+        } else {
+          msg.textContent = d.error || 'Something went wrong. Please try again.';
+          msg.className = 'err';
+        }
+      } catch {
+        msg.textContent = 'Network error. Please try again.';
+        msg.className = 'err';
+      } finally { btn.disabled = false; }
+    });
+  </script>
+</body>
+</html>
