@@ -8,9 +8,9 @@
 | A | Inbound webhooks (lead sources, form providers) | TODO |
 | B | Notifications (Resend email / SMS on new lead + stage change) | TODO |
 | C | Analytics + reporting (funnel, cost-per-lead, rep leaderboard) | TODO |
-| D | Live DNC provider integration (replace stub `lib/dnc` scrub with real API) | TODO |
-| E | Live NWS/SPC feed (replace `lib/storm` stub with real hail-report source) | TODO |
-| F | Scheduled storm imports via cron (`CRON_SECRET` gate already present) | TODO |
+| D | Live DNC provider integration (replace stub `lib/dnc` scrub with real API) | TODO (gated on paid DNC account + Jake) |
+| E | Live NWS/SPC feed (replace `lib/storm` stub with real hail-report source) | **DONE — ships dark behind `STORM_LIVE`** |
+| F | Scheduled storm imports via cron (`CRON_SECRET` gate already present) | TODO (unblocked by E) |
 | G | Contracts / e-sign + payment reconciliation feeding the ledger | TODO |
 
 > The lettered rows above (A–G) are the app's own feature phases. They are
@@ -100,6 +100,34 @@ when the ad accounts are granted.
   closed / no lead; bad signature → fail closed / no lead; valid signature →
   sanitized `source='ad'` lead created, scored, DNC-withheld; plus the Meta GET
   challenge echo (only with the correct token). `npm test` green + `lint:copy` OK.
+
+## Phase E — Live NWS hail feed — **DONE (ships dark behind `STORM_LIVE`)**
+
+Replaces the `lib/storm.js` `STUB_REPORTS` table with a real, keyless NWS source
+without changing the compliance copy or any gate. Off by default (the sync stub
+answer is used); the operator sets `STORM_LIVE=1` after verifying the endpoints
+(runbook §11).
+
+- **`lib/storm-feed.js`** — `fetchHailNearZip(zip)`: ZIP → centroid
+  (zippopotam.us) → NWS Local Storm Reports (Iowa Environmental Mesonet GeoJSON),
+  haversine-filtered to hail within `STORM_HAIL_RADIUS_MI` (25) of the centroid
+  in the last `STORM_HAIL_WINDOW_DAYS` (365). KV-cached (hail 6h, centroids 30d).
+  Every call is timeout-bounded and FAIL-SAFE: timeout / non-2xx / malformed /
+  unknown ZIP / any throw → `{reported:false, degraded:true}`. Never fabricates a
+  hit; never 500s the public intake page. Verified live 2026-07-10 (Houston 77002
+  → real hail on 2026-06-02, up to 1.5", 20mi, 21 reports; hail size read from the
+  live IEM `magf` field).
+- **`lib/storm.js`** — new async `hailReportLive(zip)` gates on `STORM_LIVE` and
+  falls back to the sync `hailReport` on any error; new `compliantBlurbFrom(zip,
+  report)` renders the honest ZIP-scoped copy from a resolved report (adds "up to
+  X inches" only when a real size is present). All sync functions are unchanged.
+- **`api/storm-status.js`** (public) + **`api/storm-import.js`** (gated) now await
+  the live path. A degraded feed makes storm-import UNDER-import (safe), never
+  seeding unverified cold leads.
+- Evidence: `test/storm-feed.test.js` — 19 offline assertions (dark-flag gate,
+  live hit with date/size/distance, distance + time filters, non-hail rejection,
+  fail-safe on feed-down / throw / unknown ZIP, cache hit, honest copy, `magf`
+  field mapping, coordinate fallback). Full suite 119/119 + `lint:copy` OK.
 
 ## Core design notes
 

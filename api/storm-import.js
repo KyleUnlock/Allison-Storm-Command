@@ -37,7 +37,10 @@ module.exports = async (req, res) => {
 
   for (const row of rows) {
     // Only import rows that map to a real NWS hail report — fail-safe.
-    const report = storm.hailReport(row.zip);
+    // Uses the live feed when STORM_LIVE is on (else the sync stub); a feed
+    // error resolves to not-reported, so a bad feed under-imports (safe) rather
+    // than importing unverified cold leads.
+    const report = await storm.hailReportLive(row.zip);
     if (!report.reported) continue;
     const lead = await leads.createLead(
       {

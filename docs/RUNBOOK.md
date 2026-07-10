@@ -215,3 +215,54 @@ fresh scrub with provenance. Do not hand-edit callability.
   do not switch to in-memory in prod (data loss). Restore KV, redeploy.
 - Escalation owner for launch decisions: Kyle. External sends and any gate
   change stay behind Kyle's approval.
+
+---
+
+## 11. Phase E — live NWS hail feed (ships dark)
+
+The storm engine's hail source is `lib/storm.js`. By default it uses a small
+built-in stub table (`STUB_REPORTS`), so a fresh deploy makes NO external calls
+and reports hail only for the stub ZIPs. Phase E adds a real, keyless NWS feed
+in `lib/storm-feed.js` that turns on ONLY when `STORM_LIVE` is set.
+
+**What it does when enabled (`STORM_LIVE=1`):** for a ZIP, resolve its centroid
+(zippopotam.us), pull NWS Local Storm Reports (Iowa Environmental Mesonet
+GeoJSON), and report a hit when a hail LSR falls within `STORM_HAIL_RADIUS_MI`
+(default 25) of that centroid in the last `STORM_HAIL_WINDOW_DAYS` (default 365).
+Results are KV-cached (hail 6h, centroids 30d). Both endpoints are free and need
+no key.
+
+**Fail-safe guarantees (do not loosen):**
+- Any timeout, non-2xx, malformed body, unknown ZIP, or thrown error resolves to
+  `reported:false` (with `degraded:true` for observability). It NEVER fabricates
+  a hit and NEVER 500s the public `/api/storm-status` page.
+- The copy is unchanged and still ZIP-scoped ("hail reported near [ZIP] per
+  NWS") — never a per-home strike claim. `lib/deal-terms` / HB-2102 fences are
+  untouched.
+- Storm imports (`api/storm-import`) only create a lead for a ZIP that returns a
+  real hit, so a degraded feed UNDER-imports (safe) rather than seeding
+  unverified cold leads.
+
+**Before flipping `STORM_LIVE=1` — verify the endpoint returns hail:**
+
+```
+# centroid (expect a places[] with lat/lon)
+curl -s https://api.zippopotam.us/us/77002
+
+# NWS LSRs for the Houston WFO over the last year (expect FeatureCollection with
+# hail features: properties.type=="H", magf inches, valid timestamp)
+curl -s "https://mesonet.agron.iastate.edu/geojson/lsr.geojson?sts=2025-07-10T00:00Z&ets=2026-07-10T00:00Z&wfos=HGX" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const b=JSON.parse(s);const h=(b.features||[]).filter(f=>String(f.properties.type).toUpperCase()==="H");console.log("features",b.features.length,"hail",h.length)})'
+```
+
+Then, from the app dir: `curl "https://allison-roofing-leadgen.vercel.app/api/storm-status?zip=77002"`
+and confirm the JSON `report.source === "nws-lsr"` with a real `date`/`sizeIn`.
+
+**Coverage note:** `STORM_LSR_WFO` scopes which NWS office's reports are queried;
+`HGX` covers the Houston/Galveston metro (Allison's market). A ZIP outside that
+office's area resolves its centroid but finds no nearby reports and honestly
+returns `reported:false`. To widen coverage, set `STORM_LSR_WFO=HGX,FWD,EWX`
+(Houston, Dallas/Ft. Worth, Austin/San Antonio) and redeploy.
+
+**To take it dark again:** unset `STORM_LIVE` and redeploy — the sync stub
+resumes with zero external calls.

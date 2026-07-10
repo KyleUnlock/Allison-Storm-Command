@@ -14,12 +14,15 @@ module.exports = async (req, res) => {
     return sendJson(res, 405, { error: 'method not allowed' });
   }
   const zip = urlOf(req).searchParams.get('zip') || '';
-  const report = storm.hailReport(zip);
+  // Live NWS feed when STORM_LIVE is on; fail-safe to the sync stub otherwise.
+  // Any feed error resolves to reported:false inside hailReportLive — this
+  // public endpoint never 500s on a down feed.
+  const report = await storm.hailReportLive(zip);
   return sendJson(res, 200, {
     zip: report.zip,
     reported: report.reported,
     headline: storm.compliantHeadline(zip),
-    blurb: storm.compliantBlurb(zip),
+    blurb: storm.compliantBlurbFrom(zip, report),
     report,
   });
 };
