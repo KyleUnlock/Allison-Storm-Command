@@ -13,6 +13,7 @@
 const auth = require('../lib/auth');
 const leads = require('../lib/leads');
 const storm = require('../lib/storm');
+const { timingSafeEqual } = require('../lib/webhook-verify');
 const { readJson, sendJson, urlOf } = require('../lib/http');
 
 function cronOk(req) {
@@ -20,7 +21,9 @@ function cronOk(req) {
   if (!secret) return false;
   const h = req.headers || {};
   const supplied = h['x-cron-secret'] || urlOf(req).searchParams.get('secret');
-  return supplied === secret;
+  // Constant-time compare on the only path that can mint source="storm" leads,
+  // matching the app-wide timing-safe secret pattern (auth + webhooks).
+  return timingSafeEqual(supplied, secret);
 }
 
 module.exports = async (req, res) => {

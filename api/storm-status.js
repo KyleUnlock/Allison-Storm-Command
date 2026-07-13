@@ -21,7 +21,10 @@ module.exports = async (req, res) => {
   return sendJson(res, 200, {
     zip: report.zip,
     reported: report.reported,
-    headline: storm.compliantHeadline(zip),
+    // Only assert an NWS hail headline when a report actually exists. Emitting
+    // the categorical "Hail reported near [ZIP]" string for a reported:false ZIP
+    // would be a per-ZIP overclaim, so it is null unless reported.
+    headline: report.reported ? storm.compliantHeadline(report.zip || zip) : null,
     blurb: storm.compliantBlurbFrom(zip, report),
     report,
   });

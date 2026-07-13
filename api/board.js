@@ -70,6 +70,7 @@ module.exports = async (req, res) => {
       .reduce((sum, l) => sum + (l.won.fee || 0), 0);
     return sendJson(res, 200, {
       stages: leads.STAGES,
+      reps: routing.repNames(),
       leads: all,
       wonTotal,
       feeTotal,
@@ -95,6 +96,11 @@ module.exports = async (req, res) => {
           actor: 'operator',
         });
       }
+      // Operator assign/reassign a rep (or clear with ''). Operator-only lever;
+      // a rep session cannot reach this handler (isOperator gate above).
+      if (body.assignedRep !== undefined) {
+        updated = await leads.setAssignedRep(id, body.assignedRep, { actor: 'operator' });
+      }
       // Status move (existing behavior). Any of these may be present in one PATCH.
       if (body.status !== undefined && String(body.status) !== '') {
         updated = await leads.updateStatus(id, String(body.status), {
@@ -113,6 +119,7 @@ module.exports = async (req, res) => {
         e.code === 'BAD_STATUS' ||
         e.code === 'BAD_CLAIM_STATUS' ||
         e.code === 'BAD_PAYMENT_STATUS' ||
+        e.code === 'BAD_REP' ||
         e.code === 'EMPTY_NOTE'
           ? 400
           : e.code === 'NOT_FOUND'

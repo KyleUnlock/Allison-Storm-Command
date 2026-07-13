@@ -85,7 +85,7 @@
       try {
         const r = await fetch('/api/storm-status?zip=' + encodeURIComponent(zip));
         const d = await r.json();
-        $('stormResult').textContent = d.blurb || d.headline;
+        $('stormResult').textContent = d.blurb;
         if (zip) $('zip2').value = zip;
       } catch { $('stormResult').textContent = 'Could not check right now.'; }
     });

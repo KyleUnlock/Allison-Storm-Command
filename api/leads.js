@@ -36,22 +36,29 @@ module.exports = async (req, res) => {
   // We deliberately IGNORE any consent/dnc field in the body.
   const consent = requested === 'web';
 
-  const lead = await leads.createLead(
-    {
-      name: body.name,
-      phone: body.phone,
-      email: body.email,
-      zip: body.zip,
-      address: body.address,
-      notes: body.notes,
-    },
-    {
-      source: requested,
-      knownCustomer: false, // forced
-      consent,
-      assignedRep: null,
-    }
-  );
+  let lead;
+  try {
+    lead = await leads.createLead(
+      {
+        name: body.name,
+        phone: body.phone,
+        email: body.email,
+        zip: body.zip,
+        address: body.address,
+        notes: body.notes,
+      },
+      {
+        source: requested,
+        knownCustomer: false, // forced
+        consent,
+        assignedRep: null,
+      }
+    );
+  } catch {
+    // A transient store failure rolls back cleanly (see createLead). Tell the
+    // homeowner to retry rather than surfacing an unhandled 500.
+    return sendJson(res, 503, { error: 'temporarily unavailable; please try again' });
+  }
 
   // SB140 SMS consent capture. Express opt-in from the homeowner's own form
   // submission — distinct from the banned self-attested DNC/consent flags. This

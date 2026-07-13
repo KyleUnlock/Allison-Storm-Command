@@ -197,8 +197,11 @@
     async function move(id, status) {
       const body = { id, status };
       if (status === 'won') {
-        body.collected = Number(prompt('Amount collected ($)?', '0')) || 0;
-        body.costs = Number(prompt('Direct job costs ($)?', '0')) || 0;
+        // Abort the whole move on a cancelled prompt — never a silent $0 Won.
+        const c = prompt('Amount collected ($)?', '0'); if (c === null) { load(); return; }
+        const k = prompt('Direct job costs ($)?', '0'); if (k === null) { load(); return; }
+        body.collected = Number(c) || 0;
+        body.costs = Number(k) || 0;
       }
       const r = await fetch('/api/my-leads', {
         method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)

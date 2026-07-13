@@ -176,6 +176,23 @@ test('invalid ZIP short-circuits before any fetch', async () => {
   assert.strictEqual(fetch.calls.centroid, 0);
 });
 
+// ---- centroid cache: short-miss TTL, not 30 days -----------------------------
+
+test('centroid: a transient miss is cached briefly and retried (not blackholed 30d)', async () => {
+  process.env.STORM_LIVE = '1';
+  const store = makeStore();
+  const T = NOW;
+  // 1) zippopotam blips -> null centroid, cached with the SHORT miss TTL.
+  const a = await feed.zipCentroid('77002', { fetch: makeFetch({ failCentroid: true }), store, now: () => T });
+  assert.strictEqual(a, null);
+  // 2) within 15 min: still serving the cached miss (no refetch attempt needed).
+  const b = await feed.zipCentroid('77002', { fetch: makeFetch({}), store, now: () => T + 5 * 60 * 1000 });
+  assert.strictEqual(b, null);
+  // 3) after 15 min: the miss expired, so a now-healthy lookup resolves.
+  const c = await feed.zipCentroid('77002', { fetch: makeFetch({}), store, now: () => T + 16 * 60 * 1000 });
+  assert.ok(c && Number.isFinite(c.lat), 'valid ZIP recovers once the feed is healthy');
+});
+
 // ---- cache -------------------------------------------------------------------
 
 test('cache: a second lookup is served from the store, no repeat fetch', async () => {

@@ -20,6 +20,10 @@
     th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
     th { background:#eef3f9; position:sticky; top:0; }
     select { padding:6px; border:1px solid var(--line); border-radius:6px; }
+    .filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+    .filters input, .filters select { padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+    .filters input { flex:1; min-width:180px; }
+    .filters .shown { color:#5b6b7c; font-size:.9rem; white-space:nowrap; }
     .empty { text-align:center; color:#5b6b7c; padding:40px; }
     .withheld { color:#9a2c2c; } .callable { color:#166534; }
     a.detail { color:var(--sky); }
@@ -28,7 +32,7 @@
 <body>
   <header>
     <h1>Board — All Leads</h1>
-    <span><a href="/crm">CRM kanban →</a> · <a href="#" id="signout">Sign out</a></span>
+    <span><a href="/crm">CRM kanban →</a> · <a href="/report">Analytics →</a> · <a href="#" id="signout">Sign out</a></span>
   </header>
   <main>
     <div class="totals">
@@ -36,10 +40,17 @@
       <div class="stat"><span>Won collected</span><b id="wonTotal">–</b></div>
       <div class="stat"><span>Fees (20% of profit)</span><b id="feeTotal">–</b></div>
     </div>
+    <div class="filters">
+      <input id="q" type="search" placeholder="Search name, phone, ZIP, address…" aria-label="Search leads" autocomplete="off" />
+      <select id="fstatus" aria-label="Filter by status"><option value="">All statuses</option></select>
+      <select id="frep" aria-label="Filter by rep"><option value="">All reps</option></select>
+      <span class="shown"><b id="shown">0</b> shown</span>
+    </div>
     <div class="wrap"><table id="tbl"><thead>
       <tr><th>Name</th><th>Score</th><th>Status</th><th>Source</th><th>ZIP</th><th>Rep</th><th>SLA</th><th>Callable</th><th>Won $</th><th>Fee</th><th></th></tr>
     </thead><tbody id="rows"></tbody></table></div>
     <div id="empty" class="empty" hidden>No leads yet. Homeowner intake at <a href="/">/</a> will populate this board.</div>
+    <div id="noMatch" class="empty" hidden>No leads match the current filters.</div>
   </main>
   <script>
     const STAGES = ['new','contacted','inspection','inspected','quoted','negotiation','won','production','completed'];
@@ -47,49 +58,95 @@
     if (!pw) location.href = '/login';
     const H = { 'X-Board-Password': pw, 'Content-Type':'application/json' };
     const money = (n) => '$' + (Number(n||0)).toLocaleString();
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let ALL = [];   // full lead list, cached so filtering never re-fetches
+    let REPS = [];  // configured rep names
 
-    document.getElementById('signout').addEventListener('click', (e)=>{ e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href='/login'; });
+    $('signout').addEventListener('click', (e)=>{ e.preventDefault(); sessionStorage.removeItem('boardPw'); location.href='/login'; });
+
+    // Seed the status filter once.
+    $('fstatus').innerHTML = '<option value="">All statuses</option>' + STAGES.map(s=>'<option>'+s+'</option>').join('');
+
+    function matches(l, q) {
+      if (!q) return true;
+      const hay = [l.name,l.phone,l.email,l.zip,l.address].map(x=>String(x||'').toLowerCase()).join(' ');
+      return hay.includes(q);
+    }
+
+    function render() {
+      const q = $('q').value.trim().toLowerCase();
+      const fs = $('fstatus').value;
+      const fr = $('frep').value;
+      const list = ALL.filter(l =>
+        matches(l,q) &&
+        (!fs || l.status===fs) &&
+        (!fr || (fr==='__unassigned' ? !l.assignedRep : l.assignedRep===fr))
+      );
+      $('shown').textContent = list.length;
+      $('empty').hidden = ALL.length > 0;
+      $('noMatch').hidden = ALL.length === 0 || list.length > 0;
+      const rows = $('rows');
+      rows.innerHTML = '';
+      for (const l of list) {
+        // All interpolated lead fields are esc()'d — safer than the prior build,
+        // and the board is operator-gated behind BOARD_PASSWORD.
+        const tr = document.createElement('tr');
+        const stage = STAGES.map(s => '<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>').join('');
+        const reps = ['<option value="">—</option>'].concat(REPS.map(r=>'<option'+(r===l.assignedRep?' selected':'')+'>'+esc(r)+'</option>')).join('');
+        tr.innerHTML =
+          '<td>'+esc(l.name||'(no name)')+'</td>'+
+          '<td>'+(l.score!=null?l.score:'—')+'</td>'+
+          '<td><select class="stagesel" data-id="'+esc(l.id)+'">'+stage+'</select></td>'+
+          '<td>'+esc(l.source||'')+(l.adSource?' · '+esc(l.adSource):'')+'</td>'+
+          '<td>'+esc(l.zip||'')+'</td>'+
+          '<td><select class="repsel" data-id="'+esc(l.id)+'">'+reps+'</select></td>'+
+          '<td class="'+(l.slaBreached?'withheld':'')+'">'+(l.slaBreached?'breached':(l.assignedAt?'ok':'—'))+'</td>'+
+          '<td class="'+(l.callable?'callable':'withheld')+'">'+(l.callable?'yes':'no')+'</td>'+
+          '<td>'+(l.won?money(l.won.collected):'—')+'</td>'+
+          '<td>'+(l.won?money(l.won.fee):'—')+'</td>'+
+          '<td><a class="detail" href="/lead?id='+encodeURIComponent(l.id)+'">open</a></td>';
+        rows.appendChild(tr);
+      }
+      rows.querySelectorAll('select.stagesel').forEach(s => s.addEventListener('change', () => move(s.dataset.id, s.value)));
+      rows.querySelectorAll('select.repsel').forEach(s => s.addEventListener('change', () => assignRep(s.dataset.id, s.value)));
+    }
 
     async function load() {
       const r = await fetch('/api/board', { headers: H });
       if (r.status === 401) { location.href = '/login'; return; }
       const d = await r.json();
-      document.getElementById('count').textContent = d.leads.length;
-      document.getElementById('wonTotal').textContent = money(d.wonTotal);
-      document.getElementById('feeTotal').textContent = money(d.feeTotal);
-      const rows = document.getElementById('rows');
-      document.getElementById('empty').hidden = d.leads.length > 0;
-      rows.innerHTML = '';
-      for (const l of d.leads) {
-        const tr = document.createElement('tr');
-        const sel = STAGES.map(s => '<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>').join('');
-        tr.innerHTML =
-          '<td>'+(l.name||'(no name)')+'</td>'+
-          '<td>'+(l.score!=null?l.score:'—')+'</td>'+
-          '<td><select data-id="'+l.id+'">'+sel+'</select></td>'+
-          '<td>'+(l.source||'')+(l.adSource?' · '+l.adSource:'')+'</td>'+
-          '<td>'+(l.zip||'')+'</td>'+
-          '<td>'+(l.assignedRep||'—')+'</td>'+
-          '<td class="'+(l.slaBreached?'withheld':'')+'">'+(l.slaBreached?'breached':(l.assignedAt?'ok':'—'))+'</td>'+
-          '<td class="'+(l.callable?'callable':'withheld')+'">'+(l.callable?'yes':'no')+'</td>'+
-          '<td>'+(l.won?money(l.won.collected):'—')+'</td>'+
-          '<td>'+(l.won?money(l.won.fee):'—')+'</td>'+
-          '<td><a class="detail" href="/lead?id='+l.id+'">open</a></td>';
-        rows.appendChild(tr);
-      }
-      rows.querySelectorAll('select').forEach(sel => sel.addEventListener('change', () => move(sel.dataset.id, sel.value)));
+      ALL = d.leads || [];
+      REPS = d.reps || [];
+      $('count').textContent = ALL.length;
+      $('wonTotal').textContent = money(d.wonTotal);
+      $('feeTotal').textContent = money(d.feeTotal);
+      $('frep').innerHTML = '<option value="">All reps</option><option value="__unassigned">Unassigned</option>' + REPS.map(r=>'<option>'+esc(r)+'</option>').join('');
+      render();
     }
 
     async function move(id, status) {
       const body = { id, status };
       if (status === 'won') {
-        body.collected = Number(prompt('Amount collected ($)?','0'))||0;
-        body.costs = Number(prompt('Direct job costs ($)?','0'))||0;
+        // Abort the whole move if either prompt is cancelled — never record a
+        // silent $0 Won. Re-load to snap the <select> back to server state.
+        const c = prompt('Amount collected ($)?','0'); if (c === null) { load(); return; }
+        const k = prompt('Direct job costs ($)?','0'); if (k === null) { load(); return; }
+        body.collected = Number(c)||0;
+        body.costs = Number(k)||0;
       }
       const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify(body) });
       if (!r.ok) { const d = await r.json(); alert(d.error||'Update failed'); }
       load();
     }
+
+    async function assignRep(id, rep) {
+      const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify({ id, assignedRep: rep }) });
+      if (!r.ok) { const d = await r.json(); alert(d.error||'Assign failed'); }
+      load();
+    }
+
+    ['q','fstatus','frep'].forEach(id => $(id).addEventListener('input', render));
     load();
   </script>
 </body>

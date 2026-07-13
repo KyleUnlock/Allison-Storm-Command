@@ -31,7 +31,7 @@
 <body>
   <header>
     <h1>CRM — Pipeline</h1>
-    <span><a href="/board">← Board</a> · <a href="#" id="signout">Sign out</a></span>
+    <span><a href="/board">← Board</a> · <a href="/report">Analytics →</a> · <a href="#" id="signout">Sign out</a></span>
   </header>
   <div class="rail" id="rail"></div>
   <script>
@@ -56,8 +56,12 @@
     async function moveLead(id, status) {
       const body = { id, status };
       if (status === 'won') {
-        body.collected = Number(prompt('Amount collected ($)?','0'))||0;
-        body.costs = Number(prompt('Direct job costs ($)?','0'))||0;
+        // Abort the whole move on a cancelled prompt — never a silent $0 Won.
+        // Re-load so the card/select snaps back to the real server state.
+        const c = prompt('Amount collected ($)?','0'); if (c === null) { load(); return; }
+        const k = prompt('Direct job costs ($)?','0'); if (k === null) { load(); return; }
+        body.collected = Number(c)||0;
+        body.costs = Number(k)||0;
       }
       const r = await fetch('/api/board', { method:'PATCH', headers:H, body:JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); alert(e.error||'Update failed'); }

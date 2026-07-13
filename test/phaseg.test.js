@@ -123,6 +123,10 @@ test('G/health: returns 200 { ok:true } with the checks shape', async () => {
   assert.strictEqual(typeof d.checks, 'object');
   assert.ok(['up', 'down'].includes(d.checks.store));
   assert.ok(['valid', 'broken', 'unknown'].includes(d.checks.ledger));
+  assert.ok(['kv', 'memory'].includes(d.checks.backend));
+  assert.strictEqual(typeof d.checks.degraded, 'boolean');
+  // Local/CI runs on the memory fallback but are NOT production, so never degraded.
+  assert.strictEqual(d.checks.degraded, false);
 });
 
 test('G/health: leaks no lead data, PII, or secret fields', async () => {
@@ -131,7 +135,7 @@ test('G/health: leaks no lead data, PII, or secret fields', async () => {
   const d = JSON.parse(raw);
   // Body is exactly the three expected top-level keys — nothing else.
   assert.deepStrictEqual(Object.keys(d).sort(), ['checks', 'ok', 'ts']);
-  assert.deepStrictEqual(Object.keys(d.checks).sort(), ['ledger', 'store']);
+  assert.deepStrictEqual(Object.keys(d.checks).sort(), ['backend', 'degraded', 'ledger', 'store']);
   // Defense in depth: none of the PII/secret field NAMES appear in the body.
   for (const field of PII_FIELDS) {
     assert.strictEqual(

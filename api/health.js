@@ -8,11 +8,16 @@
  * store is reachable and whether the hash-chained ledger verifies; it never
  * mutates state, never sends anything, and never bypasses a gate.
  *
- *   checks.store  : 'up'   KV read succeeded (or in-memory fallback answered)
- *                   'down' the read threw
- *   checks.ledger : 'valid'   ledger.verifyChain() intact
- *                   'broken'  chain tamper detected
- *                   'unknown' store unreachable, so integrity is unknowable
+ *   checks.store   : 'up'   KV read succeeded (or in-memory fallback answered)
+ *                    'down' the read threw
+ *   checks.ledger  : 'valid'   ledger.verifyChain() intact
+ *                    'broken'  chain tamper / truncation detected
+ *                    'unknown' store unreachable, so integrity is unknowable
+ *   checks.backend : 'kv'      real Upstash/Vercel KV is configured
+ *                    'memory'  the volatile in-memory fallback is in use
+ *   checks.degraded: true when running in PRODUCTION on the memory fallback —
+ *                    every inbound lead is silently lost across cold starts.
+ *                    Monitoring should alert on this even though ok stays true.
  */
 
 const store = require('./../lib/store');
@@ -31,12 +36,19 @@ module.exports = async (req, res) => {
     // answers AND gives us the chain to verify — one round-trip, no writes.
     const chain = await store.listRange('ledger');
     storeUp = true;
-    const result = ledger.verifyChain(chain);
+    // Head-aware so a tail truncation (which leaves a consistent prefix) is
+    // caught, not just an in-place tamper. An absent head is treated as
+    // unanchored, so pre-existing ledgers never false-alarm.
+    const result = ledger.verifyChain(chain, await ledger.head());
     ledgerState = result.valid ? 'valid' : 'broken';
   } catch {
     storeUp = false;
     ledgerState = 'unknown';
   }
+
+  const inProd = Boolean(
+    process.env.VERCEL || process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
+  );
 
   return sendJson(res, 200, {
     ok: true,
@@ -44,6 +56,8 @@ module.exports = async (req, res) => {
     checks: {
       store: storeUp ? 'up' : 'down',
       ledger: ledgerState,
+      backend: store.LIVE ? 'kv' : 'memory',
+      degraded: inProd && !store.LIVE,
     },
   });
 };
