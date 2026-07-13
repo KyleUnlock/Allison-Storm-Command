@@ -38,8 +38,15 @@ module.exports = async (req, res) => {
     storeUp = true;
     // Head-aware so a tail truncation (which leaves a consistent prefix) is
     // caught, not just an in-place tamper. An absent head is treated as
-    // unanchored, so pre-existing ledgers never false-alarm.
-    const result = ledger.verifyChain(chain, await ledger.head());
+    // unanchored, so pre-existing ledgers never false-alarm. The head read is
+    // isolated so a head-only blip can't mislabel an otherwise-up store.
+    let headVal = null;
+    try {
+      headVal = await ledger.head();
+    } catch {
+      headVal = null;
+    }
+    const result = ledger.verifyChain(chain, headVal);
     ledgerState = result.valid ? 'valid' : 'broken';
   } catch {
     storeUp = false;
