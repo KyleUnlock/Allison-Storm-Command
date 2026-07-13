@@ -79,13 +79,13 @@ afterEach(() => {
 test('STORM_LIVE off: hailReportLive returns the sync stub answer (no feed call)', async () => {
   delete process.env.STORM_LIVE;
   const fetch = makeFetch({ features: [hailFeature(29.79, -95.35, daysAgo(5), 1.75)] });
-  const r = await storm.hailReportLive('77002', { fetch, store: makeStore(), now });
-  // Stub knows nothing about 77002 -> not reported; and the feed was never hit.
+  const r = await storm.hailReportLive('77005', { fetch, store: makeStore(), now });
+  // Stub knows nothing about 77005 -> not reported; and the feed was never hit.
   assert.strictEqual(r.reported, false);
   assert.strictEqual(fetch.calls.lsr, 0);
   assert.strictEqual(fetch.calls.centroid, 0);
-  // Sanity: the stub's own known ZIP still reports through the live wrapper.
-  assert.strictEqual((await storm.hailReportLive('75002', { fetch, store: makeStore(), now })).reported, true);
+  // Sanity: the stub's own known ZIP (77002) still reports through the wrapper.
+  assert.strictEqual((await storm.hailReportLive('77002', { fetch, store: makeStore(), now })).reported, true);
 });
 
 // ---- live hit / miss ---------------------------------------------------------

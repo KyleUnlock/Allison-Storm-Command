@@ -57,7 +57,7 @@ const META_BODY = JSON.stringify({
               { name: 'full_name', values: ['Jordan Homeowner'] },
               { name: 'phone_number', values: ['(555) 314-1592'] },
               { name: 'email', values: ['jordan@example.com'] },
-              { name: 'zip_code', values: ['75002'] },
+              { name: 'zip_code', values: ['77002'] },
             ],
           },
         },

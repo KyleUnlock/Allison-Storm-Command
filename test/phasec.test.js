@@ -86,14 +86,14 @@ test('C1: the board view surfaces the claim (no detection-without-display)', asy
 // ---------------------------------------------------------------------------
 
 test('C2: score is deterministic for the same lead + clock', () => {
-  const lead = { source: 'web', zip: '75002', deliveredAt: new Date().toISOString() };
+  const lead = { source: 'web', zip: '77002', deliveredAt: new Date().toISOString() };
   const now = Date.now();
   assert.strictEqual(scoring.scoreLead(lead, { now }), scoring.scoreLead(lead, { now }));
 });
 
 test('C2: score orders sensibly — hail+web+fresh beats no-storm+ad+fresh', () => {
   const now = Date.now();
-  const hot = { source: 'web', zip: '75002', deliveredAt: new Date(now).toISOString() }; // reported hail
+  const hot = { source: 'web', zip: '77002', deliveredAt: new Date(now).toISOString() }; // reported hail
   const cold = { source: 'ad', zip: '00000', deliveredAt: new Date(now).toISOString() }; // no report
   const sHot = scoring.scoreLead(hot, { now });
   const sCold = scoring.scoreLead(cold, { now });
@@ -102,7 +102,7 @@ test('C2: score orders sensibly — hail+web+fresh beats no-storm+ad+fresh', () 
 });
 
 test('C2: a new lead gets a score at creation', async () => {
-  const lead = await leads.createLead({ name: 'Scored', zip: '75002' }, { source: 'web' });
+  const lead = await leads.createLead({ name: 'Scored', zip: '77002' }, { source: 'web' });
   assert.strictEqual(typeof lead.score, 'number');
   assert.ok(lead.score > 0);
 });
@@ -162,8 +162,8 @@ test('C3: assignment is server-set and round-robins over configured reps', async
 
 test('C3: territory routing takes precedence over round-robin when ZIP matches', async () => {
   process.env.REP_CREDENTIALS = 'alice:secret,bob:secret';
-  process.env.REP_TERRITORIES = 'bob:750';
-  const lead = await leads.createLead({ name: 'Terr', zip: '75002' }, { source: 'web' });
+  process.env.REP_TERRITORIES = 'bob:770'; // Houston prefix — matches 77002
+  const lead = await leads.createLead({ name: 'Terr', zip: '77002' }, { source: 'web' });
   assert.strictEqual(lead.assignedRep, 'bob');
 });
 

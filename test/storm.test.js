@@ -13,16 +13,16 @@ const leads = require('../lib/leads');
 beforeEach(() => store._resetMemory());
 
 test('storm copy uses approved NWS phrasing, never a per-home strike claim', () => {
-  const h = storm.compliantHeadline('75002');
-  assert.match(h, /hail reported near 75002 per NWS/i);
+  const h = storm.compliantHeadline('77002');
+  assert.match(h, /hail reported near 77002 per NWS/i);
   assert.doesNotMatch(h, /your roof was hit/i);
-  assert.doesNotMatch(storm.compliantBlurb('75002'), /your roof was hit/i);
+  assert.doesNotMatch(storm.compliantBlurb('77002'), /your roof was hit/i);
 });
 
 test('NWS hail lookup is fail-safe: unknown/invalid ZIP -> not reported', () => {
   assert.strictEqual(storm.hailReport('00000').reported, false);
   assert.strictEqual(storm.hailReport('abc').reported, false);
-  assert.strictEqual(storm.hailReport('75002').reported, true);
+  assert.strictEqual(storm.hailReport('77002').reported, true);
 });
 
 test('DNC fail-safe: an unscrubbed COLD lead with no provider is NOT callable (correct withhold)', () => {

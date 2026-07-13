@@ -1,6 +1,6 @@
 # Allison Storm Command
 
-Storm-restoration lead-gen app for Allison Roofing (North Texas). Static HTML
+Storm-restoration lead-gen app for Allison Roofing (Houston). Static HTML
 pages + Vercel serverless functions (`api/*.js`) + Upstash/Vercel KV, framework-free.
 
 This repo is the **CORE build** — the proven baseline. Unbuilt future phases
