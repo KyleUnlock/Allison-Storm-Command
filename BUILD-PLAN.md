@@ -2,6 +2,12 @@
 
 ## Status
 
+> **Go-live posture (verified 2026-07-19):** code is deployed to prod on `main`
+> HEAD, funnel is publicly reachable, operator gate fails closed. The ONE
+> remaining blocker to a lead-keeping funnel is **KV not wired**
+> (`/health` → `backend:"memory"` → leads vanish). Finish-line checklist +
+> canonical-project decision: **[docs/GO-LIVE.md](docs/GO-LIVE.md)**.
+
 | Phase | Scope | Status |
 |-------|-------|--------|
 | **Core** | Intake, rep console, board, CRM kanban, billing (20% profit), strict hash-chained attribution, 90-day clamp, DNC fail-safe, storm/NWS copy compliance, KV store, tests + copy-lint | **DONE** |
