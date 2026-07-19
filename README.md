@@ -6,6 +6,13 @@ pages + Vercel serverless functions (`api/*.js`) + Upstash/Vercel KV, framework-
 This repo is the **CORE build** — the proven baseline. Unbuilt future phases
 (webhooks, analytics, notifications, etc.) are tracked in `BUILD-PLAN.md`.
 
+> **Live status (verified 2026-07-19):** `main` is deployed to prod at
+> `https://allison-storm-command.vercel.app` (Deployment Protection OFF, funnel
+> publicly reachable, operator gate 401-closed). **One blocker before it keeps
+> leads: KV is not wired** — `/health` reads `backend:"memory"`, so submitted
+> leads currently vanish. The full finish-line checklist (wire KV, set secrets,
+> pick a canonical project) is in **[docs/GO-LIVE.md](docs/GO-LIVE.md)**.
+
 ## Surfaces
 
 | Path      | Who        | What                                                    |
